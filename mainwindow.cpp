@@ -6,6 +6,7 @@
 #include <QComboBox>
 #include <QVariant>
 #include <QDebug>
+#include "MyGraphics/inferpattern.h"
 
 extern const std::unordered_map<int,int> qcolor2labelIdx;
 
@@ -1149,9 +1150,38 @@ void MainWindow::on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1)
     }
 }
 
+void MainWindow::on_drawEffect_ckBox_checkStateChanged(const Qt::CheckState &arg1)
+{
+    auto removePatterns = [this]()
+    {
+        QList<QGraphicsItem *> items = m_scene->items();
+        for (QGraphicsItem *item : items)
+        {
+            InferPattern *pattern = dynamic_cast<InferPattern *>(item);
+            if (pattern)
+            {
+                m_scene->removeItem(pattern);
+                delete pattern;
+            }
+        }
+    };
+
+    if (arg1 == Qt::Unchecked)
+    {
+        removePatterns();
+    }
+    else if (arg1 == Qt::Checked && !m_curLabelInfo.label.empty())
+    {
+        removePatterns();
+        showSegInferLabel();
+    }
+}
+
 void MainWindow::showSegInferLabel()
 {
-    // 遍历所有标签
+    if (ui->drawEffect_ckBox->checkState() != Qt::Checked)
+        return;
+
     for (const auto &labelele : m_curLabelInfo.label)
     {
         // 根据标签名称从m_labelsComboBox中查找对应的颜色

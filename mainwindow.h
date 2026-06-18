@@ -96,6 +96,7 @@ private slots:
 
     void on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1);
 
+    void on_drawEffect_ckBox_checkStateChanged(const Qt::CheckState &arg1);
 
     void on_actioninferPattern_xml_triggered();
 

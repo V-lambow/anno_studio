@@ -123,6 +123,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="mainwindow.ui" line="134"/>
+        <source>显示绘制效果</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="mainwindow.ui" line="168"/>
         <location filename="build/Desktop_Qt_6_8_3_MinGW_64_bit-Debug/Royma_Vision_autogen/include/ui_mainwindow.h" line="342"/>
         <location filename="build/Desktop_Qt_6_8_3_MSVC2022_64bit-Debug/Royma_Vision_autogen/include/ui_mainwindow.h" line="342"/>
