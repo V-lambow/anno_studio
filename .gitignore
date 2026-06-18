@@ -1,0 +1,8 @@
+/build/
+/.vscode/
+/.qtcreator/
+/halcon/
+/project_demo/
+/saige/
+/resource/
+*.dll

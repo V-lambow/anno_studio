@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Royma_Vision</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout_2">
+    <item row="0" column="0">
+     <widget class="QWidget" name="widget" native="true">
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(245, 239, 255);</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="4" column="3">
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>待训练集</string>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="0" rowspan="5" colspan="3">
+        <widget class="MyGraphicsView" name="graphicsView">
+         <property name="minimumSize">
+          <size>
+           <width>500</width>
+           <height>400</height>
+          </size>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QCheckBox" name="infer_ckBox">
+         <property name="minimumSize">
+          <size>
+           <width>80</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>80</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>即时推理</string>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="3">
+        <layout class="QHBoxLayout" name="horizontalLayout"/>
+       </item>
+       <item row="8" column="3">
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>训练集</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="3">
+        <widget class="QListWidget" name="non_train_list">
+         <property name="minimumSize">
+          <size>
+           <width>200</width>
+           <height>200</height>
+          </size>
+         </property>
+         <property name="contextMenuPolicy">
+          <enum>Qt::ContextMenuPolicy::CustomContextMenu</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(249, 255, 248);
+selection-background-color: rgb(252, 255, 222);
+border-color: rgb(34, 255, 52);
+</string>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
+         </property>
+        </widget>
+       </item>
+       <item row="9" column="3">
+        <widget class="QListWidget" name="train_list">
+         <property name="minimumSize">
+          <size>
+           <width>200</width>
+           <height>200</height>
+          </size>
+         </property>
+         <property name="contextMenuPolicy">
+          <enum>Qt::ContextMenuPolicy::CustomContextMenu</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 249, 244);
+selection-color: rgb(255, 190, 179);
+border-color: rgb(255, 124, 64);</string>
+         </property>
+         <property name="alternatingRowColors">
+          <bool>false</bool>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
+         </property>
+         <property name="selectionRectVisible">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="image_info">
+         <property name="frameShape">
+          <enum>QFrame::Shape::NoFrame</enum>
+         </property>
+         <property name="text">
+          <string>图像信息；(height,width)</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="3">
+        <widget class="QCheckBox" name="inferRes_ckBox">
+         <property name="text">
+          <string>显示推理结果</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1" colspan="2">
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu">
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="title">
+     <string>文件</string>
+    </property>
+    <addaction name="actioncreate_newProject"/>
+    <addaction name="actionopen_project"/>
+    <addaction name="separator"/>
+    <addaction name="actionadd_image"/>
+    <addaction name="actionadd_imagefold"/>
+   </widget>
+   <widget class="QMenu" name="menu_2">
+    <property name="title">
+     <string>推理</string>
+    </property>
+    <addaction name="actionsaige_infer"/>
+   </widget>
+   <widget class="QMenu" name="menu_3">
+    <property name="title">
+     <string>导出</string>
+    </property>
+    <addaction name="actioninferPattern_xml"/>
+    <addaction name="actioninferPattern_json"/>
+    <addaction name="actioninferPattern_txt"/>
+    <addaction name="actioninferPattern_hdict"/>
+   </widget>
+   <widget class="QMenu" name="menu_4">
+    <property name="title">
+     <string>后处理</string>
+    </property>
+    <addaction name="actionoh_test"/>
+   </widget>
+   <addaction name="menu"/>
+   <addaction name="menu_2"/>
+   <addaction name="menu_3"/>
+   <addaction name="menu_4"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QToolBar" name="quickbuttum">
+   <property name="windowTitle">
+    <string>快捷工具栏</string>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">alternate-background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255, 178, 102, 255), stop:0.55 rgba(235, 148, 61, 255), stop:0.98 rgba(0, 0, 0, 255), stop:1 rgba(0, 0, 0, 0));</string>
+   </property>
+   <property name="movable">
+    <bool>false</bool>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::ToolBarArea::BottomToolBarArea|Qt::ToolBarArea::TopToolBarArea</set>
+   </property>
+   <property name="floatable">
+    <bool>false</bool>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actioncreate_newProject"/>
+   <addaction name="actionopen_project"/>
+   <addaction name="separator"/>
+   <addaction name="actionadd_image"/>
+   <addaction name="actionadd_imagefold"/>
+   <addaction name="separator"/>
+   <addaction name="actionsaige_infer"/>
+  </widget>
+  <action name="actioncreate_newProject">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/folder-add.svg</normaloff>:/img/folder-add.svg</iconset>
+   </property>
+   <property name="text">
+    <string>新建项目</string>
+   </property>
+  </action>
+  <action name="actionopen_project">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/folder-alt.svg</normaloff>:/img/folder-alt.svg</iconset>
+   </property>
+   <property name="text">
+    <string>打开项目</string>
+   </property>
+  </action>
+  <action name="actionadd_image">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/picture-file.svg</normaloff>:/img/picture-file.svg</iconset>
+   </property>
+   <property name="text">
+    <string>添加图片</string>
+   </property>
+  </action>
+  <action name="actioneraser">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/eraser-svgrepo-com.svg</normaloff>:/img/eraser-svgrepo-com.svg</iconset>
+   </property>
+   <property name="text">
+    <string>eraser</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actioncursor">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/cursor-svgrepo-com.svg</normaloff>:/img/cursor-svgrepo-com.svg</iconset>
+   </property>
+   <property name="text">
+    <string>cursor</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionCreateRoi">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/rectangle-dot.svg</normaloff>:/img/rectangle-dot.svg</iconset>
+   </property>
+   <property name="text">
+    <string>CreateRoi</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionadd_imagefold">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/picture-files.svg</normaloff>:/img/picture-files.svg</iconset>
+   </property>
+   <property name="text">
+    <string>加入图片文件夹</string>
+   </property>
+   <property name="iconText">
+    <string>添加图片文件夹</string>
+   </property>
+   <property name="toolTip">
+    <string>添加图片文件夹</string>
+   </property>
+  </action>
+  <action name="actionmoveinTrainlist">
+   <property name="text">
+    <string>moveinTrainlist</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionremoveTrainlist">
+   <property name="text">
+    <string>removeTrainlist</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actiondelete_non_trainlistele">
+   <property name="text">
+    <string>delete_non_trainlistele</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actiondelete_trainlistele">
+   <property name="text">
+    <string>delete_trainlistele</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionpen_brush">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/pen.svg</normaloff>:/img/pen.svg</iconset>
+   </property>
+   <property name="text">
+    <string>pen_brush</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionsaige_infer">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/favicon.ico</normaloff>:/img/favicon.ico</iconset>
+   </property>
+   <property name="text">
+    <string>赛视推理</string>
+   </property>
+  </action>
+  <action name="actioninferPattern_xml">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/xml-file.svg</normaloff>:/img/xml-file.svg</iconset>
+   </property>
+   <property name="text">
+    <string>推理结果导出为xml</string>
+   </property>
+   <property name="iconText">
+    <string>推理结果导出为XML</string>
+   </property>
+   <property name="toolTip">
+    <string>推理结果导出为xml</string>
+   </property>
+  </action>
+  <action name="actioninferPattern_json">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/json-file.svg</normaloff>:/img/json-file.svg</iconset>
+   </property>
+   <property name="text">
+    <string>推理结果导出为json</string>
+   </property>
+  </action>
+  <action name="actioninferPattern_txt">
+   <property name="icon">
+    <iconset resource="resource/resourse.qrc">
+     <normaloff>:/img/txt-file.svg</normaloff>:/img/txt-file.svg</iconset>
+   </property>
+   <property name="text">
+    <string>推理结果导出为txt</string>
+   </property>
+  </action>
+  <action name="actioninferPattern_hdict">
+   <property name="text">
+    <string>推理结果导出为hdict</string>
+   </property>
+  </action>
+  <action name="actionoh_test">
+   <property name="text">
+    <string>oh_test</string>
+   </property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>MyGraphicsView</class>
+   <extends>QGraphicsView</extends>
+   <header>mygraphicsview.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="resource/resourse.qrc"/>
+ </resources>
+ <connections/>
+</ui>
