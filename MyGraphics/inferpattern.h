@@ -35,6 +35,7 @@ protected:
     // delete
     void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+ 
 
 private:
     Labelele labelele_;

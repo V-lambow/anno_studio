@@ -1152,28 +1152,38 @@ void MainWindow::on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1)
 
 void MainWindow::on_drawEffect_ckBox_checkStateChanged(const Qt::CheckState &arg1)
 {
-    auto removePatterns = [this]()
-    {
+    auto hideAllDrawings = [this]() {
         QList<QGraphicsItem *> items = m_scene->items();
         for (QGraphicsItem *item : items)
         {
-            InferPattern *pattern = dynamic_cast<InferPattern *>(item);
+            PaintedItem *pattern = dynamic_cast<PaintedItem *>(item);
             if (pattern)
             {
-                m_scene->removeItem(pattern);
-                delete pattern;
+                pattern->hide();
+            }
+        }
+    };
+
+    auto showAllDrawings = [this]() {
+        
+        QList<QGraphicsItem *> items = m_scene->items();
+        for (QGraphicsItem *item : items)
+        {
+            PaintedItem *pattern = dynamic_cast<PaintedItem *>(item);
+            if (pattern)
+            {
+                pattern->show();
             }
         }
     };
 
     if (arg1 == Qt::Unchecked)
     {
-        removePatterns();
+        hideAllDrawings();
     }
     else if (arg1 == Qt::Checked && !m_curLabelInfo.label.empty())
     {
-        removePatterns();
-        showSegInferLabel();
+        showAllDrawings();
     }
 }
 
