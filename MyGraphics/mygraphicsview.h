@@ -26,6 +26,7 @@ public:
     void setFactor(int _factor);
     void resetCursorMode(){m_cursorMode=CURSOR_MODE::origin;};
     void switchCursorMode(CURSOR_MODE mode){m_cursorMode=mode;};
+    void setDrawEffectEnabled(bool enabled) { m_drawEffectEnabled = enabled; }
 
 signals:
     void sg_mouseMoved(const QPointF& pt);
@@ -57,6 +58,7 @@ private:
     CURSOR_MODE m_cursorMode =CURSOR_MODE::origin;
     int m_penWidth;
     Qt::GlobalColor m_penEMColor;
+    bool m_drawEffectEnabled = true;
     QPointF m_lastMousePos;
     // StrokeItem *m_currentStroke=nullptr;
     bool m_isDrawing=false;

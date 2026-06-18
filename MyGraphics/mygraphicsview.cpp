@@ -86,12 +86,14 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
     
     switch (this->m_cursorMode) {
     case CURSOR_MODE::eraser: {
+        if (!m_drawEffectEnabled) break;
         doErase(scenePos);
         m_isErasing = true;
         e->accept();
         return;
     }
     case  CURSOR_MODE::pen_brush:{
+        if (!m_drawEffectEnabled) break;
         StrokeItem *target = nullptr;
         if (!m_strokeItems.isEmpty()) {
             StrokeItem *last = m_strokeItems.last();

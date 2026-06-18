@@ -47,6 +47,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         utils/include/base_head.hpp utils/include/saigeutils.h
         utils/src/base_source.cpp
         MyGraphics/inferpattern.h MyGraphics/inferpattern.cpp
+        MyGraphics/visibilitymanager.h MyGraphics/visibilitymanager.cpp
 
 
     )
@@ -55,7 +56,9 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
 #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
 # For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 
-    qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    if(COMMAND qt_create_translation)
+        qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    endif()
 else()
     if(ANDROID)
         add_library(Royma_Vision SHARED
@@ -69,7 +72,9 @@ else()
         )
     endif()
 
-    qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    if(COMMAND qt5_create_translation)
+        qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    endif()
 endif()
 
 target_link_libraries(Royma_Vision PRIVATE Qt${QT_VERSION_MAJOR}::Widgets

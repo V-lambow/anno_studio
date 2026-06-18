@@ -115,3 +115,5 @@ void InferPattern::getArea()
     // 计算多边形面积（使用包围盒的面积）
     area_ = labelele_.area;
 }
+
+

@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QComboBox>
 #include "MyGraphics/mygraphicsview.h"
+#include "MyGraphics/visibilitymanager.h"
 #include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -98,6 +99,8 @@ private slots:
 
     void on_drawEffect_ckBox_checkStateChanged(const Qt::CheckState &arg1);
 
+    void on_inferRes_ckBox_checkStateChanged(const Qt::CheckState &arg1);
+
     void on_actioninferPattern_xml_triggered();
 
     void on_actioninferPattern_hdict_triggered();
@@ -149,5 +152,7 @@ private:
 
     LabelInfo m_curLabelInfo;
     IMAGEINFO m_displayedImageInfo;
+
+    VisibilityManager *m_visibilityMgr;
 };
 #endif // MAINWINDOW_H

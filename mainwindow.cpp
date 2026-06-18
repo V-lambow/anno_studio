@@ -80,6 +80,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_scene = new QGraphicsScene(this);
     m_scene->setBackgroundBrush(QColor::fromRgb(224, 224, 224));
     ui->graphicsView->setScene(m_scene);
+
+    m_visibilityMgr = new VisibilityManager(m_scene);
 }
 
 void MainWindow::enableDrawActions(bool enabled)
@@ -1152,46 +1154,18 @@ void MainWindow::on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1)
 
 void MainWindow::on_drawEffect_ckBox_checkStateChanged(const Qt::CheckState &arg1)
 {
-    auto hideAllDrawings = [this]() {
-        QList<QGraphicsItem *> items = m_scene->items();
-        for (QGraphicsItem *item : items)
-        {
-            PaintedItem *pattern = dynamic_cast<PaintedItem *>(item);
-            if (pattern)
-            {
-                pattern->hide();
-            }
-        }
-    };
+    bool visible = (arg1 == Qt::Checked);
+    m_visibilityMgr->setPaintedItemVisible(visible);
+    ui->graphicsView->setDrawEffectEnabled(visible);
+}
 
-    auto showAllDrawings = [this]() {
-        
-        QList<QGraphicsItem *> items = m_scene->items();
-        for (QGraphicsItem *item : items)
-        {
-            PaintedItem *pattern = dynamic_cast<PaintedItem *>(item);
-            if (pattern)
-            {
-                pattern->show();
-            }
-        }
-    };
-
-    if (arg1 == Qt::Unchecked)
-    {
-        hideAllDrawings();
-    }
-    else if (arg1 == Qt::Checked && !m_curLabelInfo.label.empty())
-    {
-        showAllDrawings();
-    }
+void MainWindow::on_inferRes_ckBox_checkStateChanged(const Qt::CheckState &arg1)
+{
+    m_visibilityMgr->setInferPatternVisible(arg1 == Qt::Checked);
 }
 
 void MainWindow::showSegInferLabel()
 {
-    if (ui->drawEffect_ckBox->checkState() != Qt::Checked)
-        return;
-
     for (const auto &labelele : m_curLabelInfo.label)
     {
         // 根据标签名称从m_labelsComboBox中查找对应的颜色
@@ -1230,6 +1204,8 @@ void MainWindow::showSegInferLabel()
         // 添加到场景
         m_scene->addItem(pattern);
     }
+
+    m_visibilityMgr->setInferPatternVisible(ui->inferRes_ckBox->isChecked());
 
     // 确保视图适配内容
     ui->graphicsView->fitInView(m_scene->itemsBoundingRect(), Qt::KeepAspectRatio);
