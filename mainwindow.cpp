@@ -87,6 +87,10 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::mergeOverlappingStrokes);
     connect(ui->graphicsView, &MyGraphicsView::sg_drawingFinished,
             this, &MainWindow::saveLabelingData);
+    connect(ui->graphicsView, &MyGraphicsView::sg_itemErasedCompletely,
+            this, [this](StrokeItem *item) {
+        m_labelingItems.removeOne(item);
+    });
 }
 
 void MainWindow::enableDrawActions(bool enabled)
@@ -1256,10 +1260,9 @@ void MainWindow::showLabelingPatterns()
     for (const auto &obj : root)
     {
         if (!obj.isMember("classname") || !obj["classname"].isString()) continue;
+        if (!obj.isMember("points") || !obj["points"].isArray()) continue;
 
         std::string className = obj["classname"].asString();
-        int penWidth = obj.isMember("pen_width") ? obj["pen_width"].asInt() : 3;
-
         Qt::GlobalColor color = Qt::gray;
         for (int i = 0; i < m_labelsComboBox->count(); ++i)
         {
@@ -1271,43 +1274,16 @@ void MainWindow::showLabelingPatterns()
             }
         }
 
-        StrokeItem *item = new StrokeItem(color, penWidth);
+        QVector<QPointF> pts;
+        for (const auto &jsonPt : obj["points"])
+        {
+            if (jsonPt.isArray() && jsonPt.size() >= 2)
+                pts.append(QPointF(jsonPt[0].asDouble(), jsonPt[1].asDouble()));
+        }
+        if (pts.size() < 3) continue;
 
-        if (obj.isMember("paths") && obj["paths"].isArray())
-        {
-            QVector<QVector<QPointF>> segments;
-            for (const auto &jsonSeg : obj["paths"])
-            {
-                if (!jsonSeg.isArray()) continue;
-                QVector<QPointF> seg;
-                for (const auto &jsonPt : jsonSeg)
-                {
-                    if (jsonPt.isArray() && jsonPt.size() >= 2)
-                        seg.append(QPointF(jsonPt[0].asDouble(), jsonPt[1].asDouble()));
-                }
-                if (seg.size() >= 2)
-                    segments.append(seg);
-            }
-            if (segments.isEmpty()) { delete item; continue; }
-            item->setPathFromPoints(segments);
-        }
-        else if (obj.isMember("points") && obj["points"].isArray())
-        {
-            QVector<QPointF> pts;
-            for (const auto &jsonPt : obj["points"])
-            {
-                if (jsonPt.isArray() && jsonPt.size() >= 2)
-                    pts.append(QPointF(jsonPt[0].asDouble(), jsonPt[1].asDouble()));
-            }
-            if (pts.size() < 3) { delete item; continue; }
-            item->setPolygonFromPoints(pts);
-        }
-        else
-        {
-            delete item;
-            continue;
-        }
-
+        StrokeItem *item = new StrokeItem(color, 3);
+        item->setPolygonFromPoints(pts);
         m_scene->addItem(item);
         m_labelingItems.append(item);
     }
@@ -1623,6 +1599,16 @@ void MainWindow::mergeOverlappingStrokes()
 {
     if (!m_scene) return;
 
+    auto outlinePath = [](StrokeItem *s) -> QPainterPath {
+        if (s->isPolygon())
+            return s->path();
+        QPainterPathStroker stroker;
+        stroker.setWidth(s->pen().widthF());
+        stroker.setCapStyle(Qt::RoundCap);
+        stroker.setJoinStyle(Qt::RoundJoin);
+        return stroker.createStroke(s->path());
+    };
+
     bool anyMerged = true;
     while (anyMerged) {
         anyMerged = false;
@@ -1639,7 +1625,7 @@ void MainWindow::mergeOverlappingStrokes()
                     continue;
 
                 if (allStrokes[i]->collidesWithItem(allStrokes[j])) {
-                    auto united = allStrokes[i]->path().united(allStrokes[j]->path());
+                    auto united = outlinePath(allStrokes[i]).united(outlinePath(allStrokes[j]));
 
                     m_scene->removeItem(allStrokes[j]);
                     m_labelingItems.removeOne(allStrokes[j]);
@@ -1647,6 +1633,7 @@ void MainWindow::mergeOverlappingStrokes()
                     delete allStrokes[j];
 
                     allStrokes[i]->setStrokePath(united);
+                    allStrokes[i]->setPolygonMode(true);
                     anyMerged = true;
                 }
             }
@@ -1666,55 +1653,49 @@ void MainWindow::saveLabelingData()
         StrokeItem *stroke = dynamic_cast<StrokeItem*>(item);
         if (!stroke) continue;
 
-        auto segments = stroke->getPathPoints();
-        if (segments.isEmpty()) continue;
+        auto outlines = stroke->getOutlinePoints();
+        QString className = m_labelsComboBox->itemText(stroke->classId());
 
-        Json::Value obj;
-        obj["classname"] = m_labelsComboBox->itemText(stroke->classId()).toStdString();
-        obj["pen_width"] = stroke->pen().width();
+        for (auto &poly : outlines) {
+            if (poly.size() < 3) continue;
 
-        obj["paths"] = Json::Value(Json::arrayValue);
-        qreal totalArea = 0.0;
-        qreal minX = (std::numeric_limits<qreal>::max)();
-        qreal maxX = (std::numeric_limits<qreal>::lowest)();
-        qreal minY = (std::numeric_limits<qreal>::max)();
-        qreal maxY = (std::numeric_limits<qreal>::lowest)();
+            Json::Value obj;
+            obj["classname"] = className.toStdString();
 
-        for (const auto &seg : segments) {
-            Json::Value jsonSeg(Json::arrayValue);
-            for (const auto &pt : seg) {
-                Json::Value pnt;
-                pnt.append(pt.x());
-                pnt.append(pt.y());
-                jsonSeg.append(pnt);
+            double area = 0.0;
+            int n = poly.size();
+            for (int i = 0; i < n; i++) {
+                int j = (i + 1) % n;
+                area += poly[i].x() * poly[j].y();
+                area -= poly[j].x() * poly[i].y();
+            }
+            obj["area"] = (unsigned int)(std::abs(area) / 2.0);
 
+            qreal minX = poly[0].x(), maxX = poly[0].x();
+            qreal minY = poly[0].y(), maxY = poly[0].y();
+            for (const auto& pt : poly) {
                 minX = qMin(minX, pt.x());
                 maxX = qMax(maxX, pt.x());
                 minY = qMin(minY, pt.y());
                 maxY = qMax(maxY, pt.y());
             }
-            obj["paths"].append(jsonSeg);
 
-            if (seg.size() >= 3) {
-                double a = 0.0;
-                int n = seg.size();
-                for (int i = 0; i < n; i++) {
-                    int j = (i + 1) % n;
-                    a += seg[i].x() * seg[j].y();
-                    a -= seg[j].x() * seg[i].y();
-                }
-                totalArea += std::abs(a) / 2.0;
+            obj["bbox"] = Json::Value(Json::arrayValue);
+            obj["bbox"].append(minX);
+            obj["bbox"].append(minY);
+            obj["bbox"].append(maxX - minX);
+            obj["bbox"].append(maxY - minY);
+
+            obj["points"] = Json::Value(Json::arrayValue);
+            for (const auto& pt : poly) {
+                Json::Value pnt;
+                pnt.append(pt.x());
+                pnt.append(pt.y());
+                obj["points"].append(pnt);
             }
+
+            root.append(obj);
         }
-
-        obj["area"] = (unsigned int)totalArea;
-        obj["bbox"] = Json::Value(Json::arrayValue);
-        obj["bbox"].append(minX);
-        obj["bbox"].append(minY);
-        obj["bbox"].append(maxX - minX);
-        obj["bbox"].append(maxY - minY);
-
-        root.append(obj);
     }
 
     QFileInfo imageInfo(imagePath);

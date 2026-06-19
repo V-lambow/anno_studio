@@ -35,6 +35,7 @@ public:
 signals:
     void sg_mouseMoved(const QPointF& pt);
     void sg_drawingFinished();
+    void sg_itemErasedCompletely(StrokeItem *item);
 
     // void itemHovered(MyGraphicsItem *item);
 
@@ -47,8 +48,6 @@ protected:
     virtual void wheelEvent(QWheelEvent *e) override;
     QVector<QVector<QPointF>> getAllStrokeOutlinePoints() const;
 
-    // 碰撞检测和合并函数
-    void checkAndMergeStrokes(StrokeItem *currentStroke);
 
 private:
     void doErase(const QPointF &scenePos);

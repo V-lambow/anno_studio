@@ -35,23 +35,20 @@ public:
 
     // 添加新的点到路径
     void addPoint(const QPointF &point,bool isPress);
-    void eraseAt(const QPointF &scenePos, qreal radius);
+    bool eraseAt(const QPointF &scenePos, qreal radius);
 
     void pathClear(){m_path.clear();}
     void setPolygonFromPoints(const QVector<QPointF>& points);
+    void setStrokePath(const QPainterPath &path);
+    void setPolygonMode(bool on) { m_isPolygon = on; }
+    bool isPolygon() const { return m_isPolygon; }
     int classId() const { return m_classId; }
 
-    // 获取笔迹外围的所有点
     QVector<QVector<QPointF>> getOutlinePoints() const;
-    QVector<QVector<QPointF>> getPathPoints() const;
-    void setPathFromPoints(const QVector<QVector<QPointF>>& segments);
-    void setStrokePath(const QPainterPath &path);
-    QVector<QRectF> getBboxesF(const QVector<QVector<QPointF>>& pointSets) const;
     QRectF boundingRect() const override;
-
+    QPainterPath shape() const override;
 
 protected:
-    // 重写绘制函数
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                QWidget *widget) override;
     int setClassId(Qt::GlobalColor color);
@@ -59,6 +56,7 @@ protected:
 private:
     QPainterPath m_path;
     int m_classId=0;
+    bool m_isPolygon = false;
 };
 
 

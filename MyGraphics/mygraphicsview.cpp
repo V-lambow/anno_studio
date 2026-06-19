@@ -94,17 +94,9 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
     }
     case  CURSOR_MODE::pen_brush:{
         if (!m_drawEffectEnabled) break;
-        StrokeItem *target = nullptr;
-        if (!m_strokeItems.isEmpty()) {
-            StrokeItem *last = m_strokeItems.last();
-            if (last->pen().color().rgb() == QColor(m_penEMColor).rgb())
-                target = last;
-        }
-        if (!target) {
-            target = new StrokeItem(m_penEMColor, m_penWidth);
-            m_strokeItems.append(target);
-            scene()->addItem(target);
-        }
+        StrokeItem *target = new StrokeItem(m_penEMColor, m_penWidth);
+        m_strokeItems.append(target);
+        scene()->addItem(target);
         m_currentStroke = target;
         m_currentStroke->addPoint(scenePos, true);
         m_isDrawing = true;
@@ -197,7 +189,12 @@ void MyGraphicsView::doErase(const QPointF &scenePos)
     for (auto *item : items) {
         auto *stroke = dynamic_cast<StrokeItem*>(item);
         if (stroke) {
-            stroke->eraseAt(scenePos, r);
+            if (!stroke->eraseAt(scenePos, r)) {
+                scene()->removeItem(stroke);
+                removeStroke(stroke);
+                emit sg_itemErasedCompletely(stroke);
+                delete stroke;
+            }
         }
     }
 }

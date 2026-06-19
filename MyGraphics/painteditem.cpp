@@ -57,8 +57,19 @@ void StrokeItem::addPoint(const QPointF &point,bool isPress)
 
 
 
-void StrokeItem::eraseAt(const QPointF &scenePos, qreal radius)
+bool StrokeItem::eraseAt(const QPointF &scenePos, qreal radius)
 {
+    if (m_isPolygon) {
+        QPointF localPos = mapFromScene(scenePos);
+        QPainterPath eraser;
+        eraser.addEllipse(localPos, radius, radius);
+        m_path = m_path.subtracted(eraser);
+        m_path.setFillRule(Qt::OddEvenFill);
+        setPath(m_path);
+        update();
+        return !m_path.isEmpty();
+    }
+
     QPointF localPos = mapFromScene(scenePos);
     QPainterPath result;
 
@@ -132,6 +143,7 @@ void StrokeItem::eraseAt(const QPointF &scenePos, qreal radius)
     m_path = result;
     setPath(m_path);
     update();
+    return true;
 }
 
 void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
@@ -141,10 +153,14 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setRenderHint(QPainter::SmoothPixmapTransform);
-    painter->setPen(pen());
+    if (m_isPolygon) {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(pen().color());
+    } else {
+        painter->setPen(pen());
+    }
     painter->drawPath(m_path);
     painter->restore();
-
 }
 
 
@@ -154,93 +170,29 @@ QVector<QVector<QPointF>> StrokeItem::getOutlinePoints() const
     QVector<QVector<QPointF>> outlinePoints;
     if (m_path.isEmpty()) return outlinePoints;
 
-    auto polygons =m_path.toFillPolygons(QTransform());
+    QPainterPath src = m_path;
+    if (!m_isPolygon) {
+        QPainterPathStroker stroker;
+        stroker.setWidth(pen().widthF());
+        stroker.setCapStyle(Qt::RoundCap);
+        stroker.setJoinStyle(Qt::RoundJoin);
+        src = stroker.createStroke(m_path);
+    }
+
+    auto polygons = src.toFillPolygons(QTransform());
     outlinePoints.reserve(polygons.size());
     for (const auto& poly : polygons)
     {
-        // 直接通过初始化列表转换 QPolygon → QVector<QPointF>
         QVector<QPointF> polyF{poly.cbegin(), poly.cend()};
-        outlinePoints.push_back(std::move(polyF)); // 移动语义，避免拷贝
+        outlinePoints.push_back(std::move(polyF));
     }
     return outlinePoints;
 }
-QVector<QRectF> StrokeItem::getBboxesF(const QVector<QVector<QPointF>>& pointSets) const
+QPainterPath StrokeItem::shape() const
 {
-    QVector<QRectF> bboxes;
-    bboxes.reserve(pointSets.size()); // 预分配内存，提升性能
-
-    // 遍历每个点集（每个内层 QVector<QPointF>）
-    for (const QVector<QPointF>& points : pointSets)
-    {
-        // 1. 处理空点集：跳过（或构造空矩形，按需调整）
-        if (points.isEmpty())
-        {
-            continue; // 若需要保留空矩形，可替换为 bboxes.append(QRectF());
-        }
-
-        // 2. 初始化极值（用浮点极值避免漏判）
-        qreal minX = std::numeric_limits<qreal>::max();
-        qreal maxX = std::numeric_limits<qreal>::lowest();
-        qreal minY = std::numeric_limits<qreal>::max();
-        qreal maxY = std::numeric_limits<qreal>::lowest();
-
-        // 3. 遍历点集，更新 x/y 极值
-        for (const QPointF& p : points)
-        {
-            minX = qMin(minX, p.x());
-            maxX = qMax(maxX, p.x());
-            minY = qMin(minY, p.y());
-            maxY = qMax(maxY, p.y());
-        }
-
-        // 4. 构造水平包围框（QRectF(minX, minY, 宽度, 高度)）
-        QRectF bbox(minX, minY, maxX - minX, maxY - minY);
-
-        // 5. （可选）过滤极小无效框（比如单点导致的 0 宽/高框）
-        const qreal minValidSize = 1e-6; // 浮点精度阈值
-        if (bbox.width() < minValidSize && bbox.height() < minValidSize)
-        {
-            continue;
-        }
-
-        // 6. 添加到结果列表
-        bboxes.append(bbox);
-    }
-
-    return bboxes;
-}
-
-QVector<QVector<QPointF>> StrokeItem::getPathPoints() const
-{
-    QVector<QVector<QPointF>> segments;
-    int n = m_path.elementCount();
-    int i = 0;
-    while (i < n) {
-        if (!m_path.elementAt(i).isMoveTo()) { i++; continue; }
-        QVector<QPointF> seg;
-        seg.append(QPointF(m_path.elementAt(i).x, m_path.elementAt(i).y));
-        i++;
-        while (i < n && m_path.elementAt(i).isLineTo()) {
-            seg.append(QPointF(m_path.elementAt(i).x, m_path.elementAt(i).y));
-            i++;
-        }
-        if (seg.size() >= 2)
-            segments.append(seg);
-    }
-    return segments;
-}
-
-void StrokeItem::setPathFromPoints(const QVector<QVector<QPointF>>& segments)
-{
-    m_path = QPainterPath();
-    for (const auto &seg : segments) {
-        if (seg.isEmpty()) continue;
-        m_path.moveTo(seg[0]);
-        for (int i = 1; i < seg.size(); ++i)
-            m_path.lineTo(seg[i]);
-    }
-    setPath(m_path);
-    update();
+    if (m_isPolygon)
+        return m_path;
+    return PaintedItem::shape();
 }
 
 void StrokeItem::setStrokePath(const QPainterPath &path)
@@ -259,6 +211,7 @@ void StrokeItem::setPolygonFromPoints(const QVector<QPointF>& points)
         m_path.lineTo(points[i]);
     m_path.closeSubpath();
     setPath(m_path);
+    m_isPolygon = true;
     update();
 }
 
