@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QComboBox>
 #include "MyGraphics/mygraphicsview.h"
+#include "MyGraphics/painteditem.h"
 #include "MyGraphics/visibilitymanager.h"
 #include <QDir>
 #include <QFileDialog>
@@ -112,6 +113,8 @@ private slots:
     void on_actionadd_imagefold_triggered();
 
     void on_actionoh_test_triggered();
+    void saveLabelingData();
+    void mergeOverlappingStrokes();
 
 signals:
     void sg_imageInfo_label(QString,int,int);
@@ -123,6 +126,7 @@ private:
     void enableDrawActions(bool enabled);
 
     void showSegInferLabel();
+    void showLabelingPatterns();
     bool writeSegInferXML(const char* xmlPath, LabelInfo& labelInfo);
     bool writeSegInferXMLsb(const char* xmlPath, LabelInfo& labelInfo);
     bool writeSegInferHdict(const char* HictPath, LabelInfo& labelInfo);
@@ -154,5 +158,6 @@ private:
     IMAGEINFO m_displayedImageInfo;
 
     VisibilityManager *m_visibilityMgr;
+    QList<PaintedItem*> m_labelingItems;
 };
 #endif // MAINWINDOW_H

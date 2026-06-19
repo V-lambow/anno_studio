@@ -8,6 +8,7 @@
 #include <QWheelEvent>
 #include <QDebug>
 #include <QPoint>
+#include <QPair>
 #include "../include/base_head.hpp"
 
 extern const std::unordered_map<int,int> qcolor2labelIdx;
@@ -27,9 +28,13 @@ public:
     void resetCursorMode(){m_cursorMode=CURSOR_MODE::origin;};
     void switchCursorMode(CURSOR_MODE mode){m_cursorMode=mode;};
     void setDrawEffectEnabled(bool enabled) { m_drawEffectEnabled = enabled; }
+    QList<QPair<int, QVector<QVector<QPointF>>>> getAllStrokesOutlineData() const;
+    void clearStrokes();
+    void removeStroke(StrokeItem *stroke);
 
 signals:
     void sg_mouseMoved(const QPointF& pt);
+    void sg_drawingFinished();
 
     // void itemHovered(MyGraphicsItem *item);
 

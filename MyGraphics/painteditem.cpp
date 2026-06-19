@@ -210,6 +210,58 @@ QVector<QRectF> StrokeItem::getBboxesF(const QVector<QVector<QPointF>>& pointSet
     return bboxes;
 }
 
+QVector<QVector<QPointF>> StrokeItem::getPathPoints() const
+{
+    QVector<QVector<QPointF>> segments;
+    int n = m_path.elementCount();
+    int i = 0;
+    while (i < n) {
+        if (!m_path.elementAt(i).isMoveTo()) { i++; continue; }
+        QVector<QPointF> seg;
+        seg.append(QPointF(m_path.elementAt(i).x, m_path.elementAt(i).y));
+        i++;
+        while (i < n && m_path.elementAt(i).isLineTo()) {
+            seg.append(QPointF(m_path.elementAt(i).x, m_path.elementAt(i).y));
+            i++;
+        }
+        if (seg.size() >= 2)
+            segments.append(seg);
+    }
+    return segments;
+}
+
+void StrokeItem::setPathFromPoints(const QVector<QVector<QPointF>>& segments)
+{
+    m_path = QPainterPath();
+    for (const auto &seg : segments) {
+        if (seg.isEmpty()) continue;
+        m_path.moveTo(seg[0]);
+        for (int i = 1; i < seg.size(); ++i)
+            m_path.lineTo(seg[i]);
+    }
+    setPath(m_path);
+    update();
+}
+
+void StrokeItem::setStrokePath(const QPainterPath &path)
+{
+    m_path = path;
+    setPath(m_path);
+    update();
+}
+
+void StrokeItem::setPolygonFromPoints(const QVector<QPointF>& points)
+{
+    if (points.isEmpty()) return;
+    m_path = QPainterPath();
+    m_path.moveTo(points[0]);
+    for (int i = 1; i < points.size(); ++i)
+        m_path.lineTo(points[i]);
+    m_path.closeSubpath();
+    setPath(m_path);
+    update();
+}
+
 int StrokeItem::setClassId(Qt::GlobalColor color){
     return qcolor2labelIdx.at(static_cast<int>(color));
 }

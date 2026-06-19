@@ -38,9 +38,14 @@ public:
     void eraseAt(const QPointF &scenePos, qreal radius);
 
     void pathClear(){m_path.clear();}
+    void setPolygonFromPoints(const QVector<QPointF>& points);
+    int classId() const { return m_classId; }
 
     // 获取笔迹外围的所有点
     QVector<QVector<QPointF>> getOutlinePoints() const;
+    QVector<QVector<QPointF>> getPathPoints() const;
+    void setPathFromPoints(const QVector<QVector<QPointF>>& segments);
+    void setStrokePath(const QPainterPath &path);
     QVector<QRectF> getBboxesF(const QVector<QVector<QPointF>>& pointSets) const;
     QRectF boundingRect() const override;
 

@@ -82,6 +82,11 @@ MainWindow::MainWindow(QWidget *parent)
     ui->graphicsView->setScene(m_scene);
 
     m_visibilityMgr = new VisibilityManager(m_scene);
+
+    connect(ui->graphicsView, &MyGraphicsView::sg_drawingFinished,
+            this, &MainWindow::mergeOverlappingStrokes);
+    connect(ui->graphicsView, &MyGraphicsView::sg_drawingFinished,
+            this, &MainWindow::saveLabelingData);
 }
 
 void MainWindow::enableDrawActions(bool enabled)
@@ -785,7 +790,9 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
         return;
     }
 
+    ui->graphicsView->clearStrokes();
     m_scene->clear();
+    m_labelingItems.clear();
     m_displayedImageInfo.clear();
     // 添加图像到场景
     QGraphicsPixmapItem *pixmapItem = m_scene->addPixmap(pixmap);
@@ -858,12 +865,18 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
             {
                 //清空当前图像
                 m_scene->clear();
+                m_labelingItems.clear();
                 QPixmap ienPix = QPixmap::fromImage( (std::get<QImage>(resInfer)));
                 m_scene->addPixmap(ienPix);
             }
-        }
-        return;
     }
+    if (ui->drawEffect_ckBox->isChecked())
+        showLabelingPatterns();
+    return;
+}
+    if (ui->drawEffect_ckBox->isChecked())
+        showLabelingPatterns();
+
     if (ui->inferRes_ckBox->checkState() == Qt::Checked)
     {
         // 查找文件路径 如果没有就不显示
@@ -941,7 +954,9 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
     else
     {
         // 清除现有内容
+        ui->graphicsView->clearStrokes();
         scene->clear();
+        m_labelingItems.clear();
     }
 
     // 添加图像到场景
@@ -1009,11 +1024,14 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
             {
                 //清空当前图像
                 scene->clear();
+                m_labelingItems.clear();
                 QPixmap ienPix = QPixmap::fromImage( (std::get<QImage>(resInfer)));
                 scene->addPixmap(ienPix);
             }
         }
     }
+    if (ui->drawEffect_ckBox->isChecked())
+        showLabelingPatterns();
 }
 
 void MainWindow::on_actioneraser_triggered()
@@ -1157,6 +1175,9 @@ void MainWindow::on_drawEffect_ckBox_checkStateChanged(const Qt::CheckState &arg
     bool visible = (arg1 == Qt::Checked);
     m_visibilityMgr->setPaintedItemVisible(visible);
     ui->graphicsView->setDrawEffectEnabled(visible);
+
+    if (visible)
+        showLabelingPatterns();
 }
 
 void MainWindow::on_inferRes_ckBox_checkStateChanged(const Qt::CheckState &arg1)
@@ -1209,6 +1230,87 @@ void MainWindow::showSegInferLabel()
 
     // 确保视图适配内容
     ui->graphicsView->fitInView(m_scene->itemsBoundingRect(), Qt::KeepAspectRatio);
+}
+
+void MainWindow::showLabelingPatterns()
+{
+    if (m_displayedImageInfo.imagePath.isEmpty()) return;
+    if (!m_labelingItems.isEmpty()) return;
+
+    QFileInfo imageInfo(m_displayedImageInfo.imagePath);
+    QString jsonPath = imageInfo.path() + QDir::separator()
+                       + imageInfo.baseName() + "_labeling.json";
+
+    if (!QFile::exists(jsonPath)) return;
+
+    Json::Reader reader;
+    Json::Value root;
+    QFile file(jsonPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QByteArray jsonData = file.readAll();
+    file.close();
+
+    if (!reader.parse(jsonData.toStdString(), root)) return;
+    if (!root.isArray()) return;
+
+    for (const auto &obj : root)
+    {
+        if (!obj.isMember("classname") || !obj["classname"].isString()) continue;
+
+        std::string className = obj["classname"].asString();
+        int penWidth = obj.isMember("pen_width") ? obj["pen_width"].asInt() : 3;
+
+        Qt::GlobalColor color = Qt::gray;
+        for (int i = 0; i < m_labelsComboBox->count(); ++i)
+        {
+            if (m_labelsComboBox->itemText(i) == QString::fromStdString(className))
+            {
+                int colorIdx = m_labelsComboBox->itemData(i).toInt();
+                color = static_cast<Qt::GlobalColor>(colorIdx);
+                break;
+            }
+        }
+
+        StrokeItem *item = new StrokeItem(color, penWidth);
+
+        if (obj.isMember("paths") && obj["paths"].isArray())
+        {
+            QVector<QVector<QPointF>> segments;
+            for (const auto &jsonSeg : obj["paths"])
+            {
+                if (!jsonSeg.isArray()) continue;
+                QVector<QPointF> seg;
+                for (const auto &jsonPt : jsonSeg)
+                {
+                    if (jsonPt.isArray() && jsonPt.size() >= 2)
+                        seg.append(QPointF(jsonPt[0].asDouble(), jsonPt[1].asDouble()));
+                }
+                if (seg.size() >= 2)
+                    segments.append(seg);
+            }
+            if (segments.isEmpty()) { delete item; continue; }
+            item->setPathFromPoints(segments);
+        }
+        else if (obj.isMember("points") && obj["points"].isArray())
+        {
+            QVector<QPointF> pts;
+            for (const auto &jsonPt : obj["points"])
+            {
+                if (jsonPt.isArray() && jsonPt.size() >= 2)
+                    pts.append(QPointF(jsonPt[0].asDouble(), jsonPt[1].asDouble()));
+            }
+            if (pts.size() < 3) { delete item; continue; }
+            item->setPolygonFromPoints(pts);
+        }
+        else
+        {
+            delete item;
+            continue;
+        }
+
+        m_scene->addItem(item);
+        m_labelingItems.append(item);
+    }
 }
 
 void MainWindow::on_actioninferPattern_xml_triggered()
@@ -1516,6 +1618,124 @@ void MainWindow::on_actionadd_imagefold_triggered()
 
 }
 
+
+void MainWindow::mergeOverlappingStrokes()
+{
+    if (!m_scene) return;
+
+    bool anyMerged = true;
+    while (anyMerged) {
+        anyMerged = false;
+
+        QList<StrokeItem*> allStrokes;
+        for (auto *item : m_scene->items()) {
+            auto *s = dynamic_cast<StrokeItem*>(item);
+            if (s) allStrokes.append(s);
+        }
+
+        for (int i = 0; i < allStrokes.size() && !anyMerged; ++i) {
+            for (int j = i + 1; j < allStrokes.size() && !anyMerged; ++j) {
+                if (allStrokes[i]->classId() != allStrokes[j]->classId())
+                    continue;
+
+                if (allStrokes[i]->collidesWithItem(allStrokes[j])) {
+                    auto united = allStrokes[i]->path().united(allStrokes[j]->path());
+
+                    m_scene->removeItem(allStrokes[j]);
+                    m_labelingItems.removeOne(allStrokes[j]);
+                    ui->graphicsView->removeStroke(allStrokes[j]);
+                    delete allStrokes[j];
+
+                    allStrokes[i]->setStrokePath(united);
+                    anyMerged = true;
+                }
+            }
+        }
+    }
+}
+
+void MainWindow::saveLabelingData()
+{
+    QString imagePath = m_displayedImageInfo.imagePath;
+    if (imagePath.isEmpty()) return;
+
+    Json::Value root;
+
+    const auto &items = m_scene->items();
+    for (QGraphicsItem *item : items) {
+        StrokeItem *stroke = dynamic_cast<StrokeItem*>(item);
+        if (!stroke) continue;
+
+        auto segments = stroke->getPathPoints();
+        if (segments.isEmpty()) continue;
+
+        Json::Value obj;
+        obj["classname"] = m_labelsComboBox->itemText(stroke->classId()).toStdString();
+        obj["pen_width"] = stroke->pen().width();
+
+        obj["paths"] = Json::Value(Json::arrayValue);
+        qreal totalArea = 0.0;
+        qreal minX = (std::numeric_limits<qreal>::max)();
+        qreal maxX = (std::numeric_limits<qreal>::lowest)();
+        qreal minY = (std::numeric_limits<qreal>::max)();
+        qreal maxY = (std::numeric_limits<qreal>::lowest)();
+
+        for (const auto &seg : segments) {
+            Json::Value jsonSeg(Json::arrayValue);
+            for (const auto &pt : seg) {
+                Json::Value pnt;
+                pnt.append(pt.x());
+                pnt.append(pt.y());
+                jsonSeg.append(pnt);
+
+                minX = qMin(minX, pt.x());
+                maxX = qMax(maxX, pt.x());
+                minY = qMin(minY, pt.y());
+                maxY = qMax(maxY, pt.y());
+            }
+            obj["paths"].append(jsonSeg);
+
+            if (seg.size() >= 3) {
+                double a = 0.0;
+                int n = seg.size();
+                for (int i = 0; i < n; i++) {
+                    int j = (i + 1) % n;
+                    a += seg[i].x() * seg[j].y();
+                    a -= seg[j].x() * seg[i].y();
+                }
+                totalArea += std::abs(a) / 2.0;
+            }
+        }
+
+        obj["area"] = (unsigned int)totalArea;
+        obj["bbox"] = Json::Value(Json::arrayValue);
+        obj["bbox"].append(minX);
+        obj["bbox"].append(minY);
+        obj["bbox"].append(maxX - minX);
+        obj["bbox"].append(maxY - minY);
+
+        root.append(obj);
+    }
+
+    QFileInfo imageInfo(imagePath);
+    QString jsonPath = imageInfo.path() + QDir::separator()
+                       + imageInfo.baseName() + "_labeling.json";
+
+    if (root.empty()) {
+        QFile::remove(jsonPath);
+        return;
+    }
+
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "    ";
+    std::string jsonStr = Json::writeString(writer, root);
+
+    QFile file(jsonPath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << QString::fromStdString(jsonStr);
+    }
+}
 
 void MainWindow::on_actionoh_test_triggered()
 {

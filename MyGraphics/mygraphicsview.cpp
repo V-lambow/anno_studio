@@ -163,9 +163,11 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
         if (m_isDrawing) {
             m_currentStroke = nullptr;
             m_isDrawing = false;
+            emit sg_drawingFinished();
         }
         if (m_isErasing) {
             m_isErasing = false;
+            emit sg_drawingFinished();
         }
         if (m_isDrawing || m_isErasing) {
             e->accept();
@@ -211,5 +213,37 @@ void MyGraphicsView::updateCursor()
         setCursor(Qt::ArrowCursor);
         break;
     }
+}
+
+QList<QPair<int, QVector<QVector<QPointF>>>> MyGraphicsView::getAllStrokesOutlineData() const
+{
+    QList<QPair<int, QVector<QVector<QPointF>>>> result;
+    for (const auto* stroke : m_strokeItems) {
+        auto outlines = stroke->getOutlinePoints();
+        for (auto& poly : outlines) {
+            for (auto& pt : poly) {
+                pt = stroke->mapToScene(pt);
+            }
+        }
+        result.append({stroke->classId(), std::move(outlines)});
+    }
+    return result;
+}
+
+void MyGraphicsView::clearStrokes()
+{
+    for (auto* stroke : m_strokeItems) {
+        scene()->removeItem(stroke);
+        delete stroke;
+    }
+    m_strokeItems.clear();
+    m_currentStroke = nullptr;
+    m_isDrawing = false;
+    m_isErasing = false;
+}
+
+void MyGraphicsView::removeStroke(StrokeItem *stroke)
+{
+    m_strokeItems.removeOne(stroke);
 }
 
