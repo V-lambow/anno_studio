@@ -13,6 +13,7 @@
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QLineEdit>
+#include <QLibrary>
 #include "MyGraphics/inferpattern.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -120,6 +121,18 @@ MainWindow::MainWindow(QWidget *parent)
             this, [this](StrokeItem *item) {
         m_labelingItems.removeOne(item);
     });
+
+    {
+        QLibrary saigeLib("SaigeVision.dll");
+        m_saigeAvailable = saigeLib.load();
+        if (m_saigeAvailable)
+            saigeLib.unload();
+    }
+    if (!m_saigeAvailable) {
+        ui->actionsaige_infer->setEnabled(false);
+        ui->infer_ckBox->setEnabled(false);
+        qDebug() << "SaigeVision.dll not found - Saige features disabled";
+    }
 }
 
 void MainWindow::enableDrawActions(bool enabled)
@@ -949,6 +962,11 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
     m_curLabelInfo.clear();
     if (ui->infer_ckBox->isChecked())
     {
+        if (!m_saigeAvailable) {
+            QMessageBox::warning(this, "Saige 不可用",
+                                 "未找到 SaigeVision.dll，推理功能无法使用");
+            return;
+        }
         // 1. 检查模型是否加载
         if (m_inferPara.modelPath == nullptr)
         {
@@ -1108,6 +1126,11 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
     m_curLabelInfo.clear();
     if (ui->infer_ckBox->isChecked())
     {
+        if (!m_saigeAvailable) {
+            QMessageBox::warning(this, "Saige 不可用",
+                                 "未找到 SaigeVision.dll，推理功能无法使用");
+            return;
+        }
         // 1. 检查模型是否加载
         if (m_inferPara.modelPath == nullptr)
         {
@@ -1185,6 +1208,11 @@ void MainWindow::on_actionpen_brush_triggered()
 
 void MainWindow::on_actionsaige_infer_triggered()
 {
+    if (!m_saigeAvailable) {
+        QMessageBox::warning(this, "Saige 不可用",
+                             "未找到 SaigeVision.dll，推理功能无法使用");
+        return;
+    }
     SaigeInfer dlg;
     connect(&dlg, &SaigeInfer::sg_saigeInferPara, this, &MainWindow::set_saigeInferPara);
     dlg.exec();
@@ -1192,6 +1220,11 @@ void MainWindow::on_actionsaige_infer_triggered()
 
 void MainWindow::set_saigeInferPara(SaigeInferPara param)
 {
+    if (!m_saigeAvailable) {
+        QMessageBox::warning(this, "Saige 不可用",
+                             "未找到 SaigeVision.dll，无法初始化模型");
+        return;
+    }
     //启动qt不定时进度条
     QProgressDialog progressDialog("模型初始化... ...", "", 0, 0, this);
     //不显示取消
@@ -1286,6 +1319,13 @@ void MainWindow::on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1)
 {
     if (arg1 == Qt::Checked)
     {
+        if (!m_saigeAvailable) {
+            QMessageBox::warning(this, "Saige 不可用",
+                                 "未找到 SaigeVision.dll，推理功能无法使用");
+            QTimer::singleShot(0, this, [this]()
+                               { ui->infer_ckBox->setChecked(false); });
+            return;
+        }
         if (m_saigeHdl.inferHdl == 0)
         {
             QMessageBox::warning(this, "推理句柄不存在",

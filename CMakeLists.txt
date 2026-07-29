@@ -81,6 +81,11 @@ target_link_libraries(AnnoStudio PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/saige/lib/SaigeVision.lib
     ${CMAKE_CURRENT_SOURCE_DIR}/halcon/lib/halconcpp.lib
 )
+
+if(WIN32)
+    target_link_options(AnnoStudio PRIVATE /DELAYLOAD:SaigeVision.dll)
+    target_link_libraries(AnnoStudio PRIVATE delayimp.lib)
+endif()
   target_link_libraries(AnnoStudio PRIVATE JsonCpp::JsonCpp)
 target_link_libraries(AnnoStudio PRIVATE Qt6::Core)
 

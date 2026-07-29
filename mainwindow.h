@@ -158,6 +158,7 @@ private:
     InferPara m_inferPara;
 
     SaigeHandle m_saigeHdl;
+    bool m_saigeAvailable = false;
 
     LabelInfo m_curLabelInfo;
     IMAGEINFO m_displayedImageInfo;
