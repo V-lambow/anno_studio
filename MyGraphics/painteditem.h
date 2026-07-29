@@ -10,8 +10,6 @@
 #include <QRectF>
 #include "../include/base_head.hpp"
 
-extern const std::unordered_map<int,int> qcolor2labelIdx;
-
 
 // 自定义图形项基类
 class PaintedItem : public QGraphicsPathItem
@@ -31,7 +29,7 @@ public:
 class StrokeItem : public PaintedItem
 {
 public:
-    StrokeItem(Qt::GlobalColor emColor, int penSize, QGraphicsPathItem *parent = nullptr);
+    StrokeItem(QColor color, int penSize, int classId, QGraphicsPathItem *parent = nullptr);
 
     // 添加新的点到路径
     void addPoint(const QPointF &point,bool isPress);
@@ -51,7 +49,7 @@ public:
 protected:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                QWidget *widget) override;
-    int setClassId(Qt::GlobalColor color);
+    int setClassId(int classId);
 
 private:
     QPainterPath m_path;

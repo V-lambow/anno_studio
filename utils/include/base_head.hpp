@@ -106,8 +106,6 @@ struct LabelInfo
 };
 
 
-const std::unordered_map<int,int> qcolor2labelIdx={{static_cast<int>(Qt::red),0},{static_cast<int>(Qt::green),1},{static_cast<int>(Qt::blue),2}};
-
 std::vector<std::string> getListWidgetItemsStrList(
     QListWidget *listWidget,
     const std::string &prefix = "",

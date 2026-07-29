@@ -11,8 +11,6 @@
 #include <QPair>
 #include "../include/base_head.hpp"
 
-extern const std::unordered_map<int,int> qcolor2labelIdx;
-
 
 class MyGraphicsView : public QGraphicsView
 {
@@ -21,7 +19,8 @@ public:
     explicit MyGraphicsView(QWidget *parent = nullptr);
 
     void setPenWidth(int width) { m_penWidth = width; }
-    void setPenColor(Qt::GlobalColor color) { m_penEMColor = color; }
+    void setPenColor(QColor color) { m_penColor = color; }
+    void setCurrentClassId(int id) { m_currentClassId = id; }
     void updateCursor();
     int getFactor();
     void setFactor(int _factor);
@@ -61,7 +60,8 @@ private:
 
     CURSOR_MODE m_cursorMode =CURSOR_MODE::origin;
     int m_penWidth;
-    Qt::GlobalColor m_penEMColor;
+    QColor m_penColor;
+    int m_currentClassId = 0;
     bool m_drawEffectEnabled = true;
     QPointF m_lastMousePos;
     // StrokeItem *m_currentStroke=nullptr;

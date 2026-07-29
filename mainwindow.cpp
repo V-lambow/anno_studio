@@ -6,9 +6,14 @@
 #include <QComboBox>
 #include <QVariant>
 #include <QDebug>
+#include <QInputDialog>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QColorDialog>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QLineEdit>
 #include "MyGraphics/inferpattern.h"
-
-extern const std::unordered_map<int,int> qcolor2labelIdx;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -36,16 +41,40 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 添加标签下拉栏
     m_labelsComboBox = new QComboBox(this);
-    m_labelsComboBox->addItem("阳极", QVariant::fromValue(Qt::red));
-    m_labelsComboBox->addItem("阴极", QVariant::fromValue(Qt::green));
-    m_labelsComboBox->addItem("其他", QVariant::fromValue(Qt::blue));
-    penToolBar->addWidget(new QLabel("标签颜色:", this));
-    penToolBar->addWidget(m_labelsComboBox);
+    m_labelsComboBox->addItem("阳极", QVariant::fromValue(QColor(Qt::red)));
+    m_labelsComboBox->addItem("阴极", QVariant::fromValue(QColor(Qt::green)));
+    m_labelsComboBox->addItem("其他", QVariant::fromValue(QColor(Qt::blue)));
     connect(m_labelsComboBox, &QComboBox::currentIndexChanged, this, [this](int idx)
             {
-        int colorIdx=m_labelsComboBox->itemData(idx).toInt();
-        Qt::GlobalColor color = static_cast<Qt::GlobalColor>(colorIdx);
-        ui->graphicsView->setPenColor(color); });
+        if (idx < 0) return;
+        QColor color = m_labelsComboBox->itemData(idx).value<QColor>();
+        ui->graphicsView->setPenColor(color);
+        ui->graphicsView->setCurrentClassId(idx); });
+
+    m_addLabelBtn = new QPushButton("+", this);
+    m_addLabelBtn->setFixedWidth(24);
+    m_addLabelBtn->setToolTip("添加标签");
+    connect(m_addLabelBtn, &QPushButton::clicked, this, &MainWindow::onAddLabel);
+
+    m_removeLabelBtn = new QPushButton("-", this);
+    m_removeLabelBtn->setFixedWidth(24);
+    m_removeLabelBtn->setToolTip("删除当前标签");
+    connect(m_removeLabelBtn, &QPushButton::clicked, this, &MainWindow::onRemoveLabel);
+
+    QWidget *labelGroup = new QWidget(this);
+    QVBoxLayout *labelGroupLayout = new QVBoxLayout(labelGroup);
+    labelGroupLayout->setContentsMargins(0, 0, 0, 0);
+    labelGroupLayout->setSpacing(2);
+    labelGroupLayout->addWidget(m_labelsComboBox);
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->setContentsMargins(0, 0, 0, 0);
+    btnLayout->setSpacing(2);
+    btnLayout->addStretch();
+    btnLayout->addWidget(m_addLabelBtn);
+    btnLayout->addWidget(m_removeLabelBtn);
+    labelGroupLayout->addLayout(btnLayout);
+    penToolBar->addWidget(new QLabel("标签颜色:", this));
+    penToolBar->addWidget(labelGroup);
 
     penToolBar->addSeparator();
 
@@ -109,10 +138,111 @@ void MainWindow::onPenWidthChanged(int width)
 
 void MainWindow::onLabelColorChanged(int index)
 {
+    if (index < 0) return;
+    QColor color = m_labelsComboBox->itemData(index).value<QColor>();
+    ui->graphicsView->setPenColor(color);
+    ui->graphicsView->updateCursor();
+}
 
-    Qt::GlobalColor color = m_labelsComboBox->itemData(index).value<Qt::GlobalColor>();
-    m_view->setPenColor(color);
-    m_view->updateCursor();
+void MainWindow::onAddLabel()
+{
+    struct MorandiColor { QString name; QColor color; };
+    static const MorandiColor morandiColors[] = {
+        {"莫兰迪蓝", QColor(139, 167, 199)},
+        {"莫兰迪绿", QColor(168, 187, 168)},
+        {"莫兰迪粉", QColor(212, 165, 165)},
+        {"莫兰迪紫", QColor(184, 169, 201)},
+        {"莫兰迪黄", QColor(212, 197, 169)},
+        {"莫兰迪灰", QColor(184, 184, 184)},
+        {"莫兰迪棕", QColor(196, 168, 130)},
+    };
+
+    QDialog dlg(this);
+    dlg.setWindowTitle("添加标签");
+    dlg.setFixedSize(300, 220);
+
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
+
+    layout->addWidget(new QLabel("标签名称:"));
+    QLineEdit *nameEdit = new QLineEdit(&dlg);
+    layout->addWidget(nameEdit);
+
+    layout->addWidget(new QLabel("标签颜色:"));
+    QHBoxLayout *colorLayout = new QHBoxLayout();
+
+    QComboBox *colorCombo = new QComboBox(&dlg);
+    colorCombo->addItem("随机");
+    for (const auto &mc : morandiColors)
+        colorCombo->addItem(mc.name, QVariant::fromValue(mc.color));
+
+    QPushButton *pickBtn = new QPushButton("🎨", &dlg);
+    pickBtn->setFixedWidth(30);
+    pickBtn->setToolTip("选择自定义颜色");
+
+    QLabel *preview = new QLabel(&dlg);
+    preview->setFixedSize(24, 24);
+    preview->setAutoFillBackground(true);
+
+    colorLayout->addWidget(colorCombo);
+    colorLayout->addWidget(pickBtn);
+    colorLayout->addWidget(preview);
+    layout->addLayout(colorLayout);
+
+    QDialogButtonBox *btnBox = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    btnBox->button(QDialogButtonBox::Ok)->setText("确定");
+    btnBox->button(QDialogButtonBox::Cancel)->setText("取消");
+    layout->addWidget(btnBox);
+
+    QColor selectedColor;
+    auto updatePreview = [preview](const QColor &c) {
+        QPalette pal = preview->palette();
+        pal.setColor(QPalette::Window, c);
+        preview->setPalette(pal);
+    };
+
+    connect(colorCombo, &QComboBox::currentIndexChanged, &dlg, [&](int idx) {
+        if (idx == 0) {
+            selectedColor = QColor::fromRgb(
+                QRandomGenerator::global()->bounded(256),
+                QRandomGenerator::global()->bounded(256),
+                QRandomGenerator::global()->bounded(256));
+        } else {
+            selectedColor = colorCombo->itemData(idx).value<QColor>();
+        }
+        updatePreview(selectedColor);
+    });
+    colorCombo->setCurrentIndex(0);
+
+    connect(pickBtn, &QPushButton::clicked, &dlg, [&]() {
+        QColor c = QColorDialog::getColor(selectedColor, &dlg, "选择自定义颜色");
+        if (c.isValid()) {
+            selectedColor = c;
+            updatePreview(c);
+            colorCombo->setCurrentIndex(0);
+        }
+    });
+
+    connect(btnBox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(btnBox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() == QDialog::Accepted && !nameEdit->text().isEmpty()) {
+        if (!selectedColor.isValid())
+            selectedColor = QColor::fromRgb(
+                QRandomGenerator::global()->bounded(256),
+                QRandomGenerator::global()->bounded(256),
+                QRandomGenerator::global()->bounded(256));
+        m_labelsComboBox->addItem(nameEdit->text(), QVariant::fromValue(selectedColor));
+        m_labelsComboBox->setCurrentIndex(m_labelsComboBox->count() - 1);
+    }
+}
+
+void MainWindow::onRemoveLabel()
+{
+    int idx = m_labelsComboBox->currentIndex();
+    if (idx >= 0 && m_labelsComboBox->count() > 1) {
+        m_labelsComboBox->removeItem(idx);
+    }
 }
 
 void MainWindow::onCursorActionTriggered()
@@ -1208,9 +1338,7 @@ void MainWindow::showSegInferLabel()
             {
                 if (m_labelsComboBox->itemText(i) == labelName)
                 {
-                    // 找到匹配项，获取对应的颜色
-                    int colorIdx = m_labelsComboBox->itemData(i).toInt();
-                    color = static_cast<Qt::GlobalColor>(colorIdx);
+                    color = m_labelsComboBox->itemData(i).value<QColor>();
                     colorFound = true;
                     break;
                 }
@@ -1263,16 +1391,18 @@ void MainWindow::showLabelingPatterns()
         if (!obj.isMember("points") || !obj["points"].isArray()) continue;
 
         std::string className = obj["classname"].asString();
-        Qt::GlobalColor color = Qt::gray;
+        QColor color = Qt::gray;
+        int classId = -1;
         for (int i = 0; i < m_labelsComboBox->count(); ++i)
         {
             if (m_labelsComboBox->itemText(i) == QString::fromStdString(className))
             {
-                int colorIdx = m_labelsComboBox->itemData(i).toInt();
-                color = static_cast<Qt::GlobalColor>(colorIdx);
+                color = m_labelsComboBox->itemData(i).value<QColor>();
+                classId = i;
                 break;
             }
         }
+        if (classId < 0) continue;
 
         QVector<QPointF> pts;
         for (const auto &jsonPt : obj["points"])
@@ -1282,7 +1412,7 @@ void MainWindow::showLabelingPatterns()
         }
         if (pts.size() < 3) continue;
 
-        StrokeItem *item = new StrokeItem(color, 3);
+        StrokeItem *item = new StrokeItem(color, 3, classId);
         item->setPolygonFromPoints(pts);
         m_scene->addItem(item);
         m_labelingItems.append(item);

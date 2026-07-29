@@ -30,10 +30,10 @@ void PaintedItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *optio
     Q_UNUSED(widget);
 }
 
-StrokeItem::StrokeItem(Qt::GlobalColor emColor, int penSize, QGraphicsPathItem *parent)
-    : PaintedItem(QColor(emColor), penSize, parent)
+StrokeItem::StrokeItem(QColor color, int penSize, int classId, QGraphicsPathItem *parent)
+    : PaintedItem(color, penSize, parent)
 {
-    m_classId=setClassId(emColor);
+    m_classId=classId;
     QPen p = pen();
     p.setCapStyle(Qt::RoundCap);
     p.setJoinStyle(Qt::RoundJoin);
@@ -215,8 +215,9 @@ void StrokeItem::setPolygonFromPoints(const QVector<QPointF>& points)
     update();
 }
 
-int StrokeItem::setClassId(Qt::GlobalColor color){
-    return qcolor2labelIdx.at(static_cast<int>(color));
+int StrokeItem::setClassId(int classId){
+    m_classId = classId;
+    return m_classId;
 }
 QRectF StrokeItem::boundingRect() const {
     return PaintedItem::boundingRect();

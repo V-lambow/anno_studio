@@ -5,7 +5,7 @@
 MyGraphicsView::MyGraphicsView(QWidget *parent)
     : QGraphicsView(parent)
     , m_penWidth(10)
-    , m_penEMColor(Qt::red)
+    , m_penColor(Qt::red)
 {
     setRenderHint(QPainter::Antialiasing);
     setDragMode(QGraphicsView::RubberBandDrag);
@@ -94,7 +94,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
     }
     case  CURSOR_MODE::pen_brush:{
         if (!m_drawEffectEnabled) break;
-        StrokeItem *target = new StrokeItem(m_penEMColor, m_penWidth);
+        StrokeItem *target = new StrokeItem(m_penColor, m_penWidth, m_currentClassId);
         m_strokeItems.append(target);
         scene()->addItem(target);
         m_currentStroke = target;

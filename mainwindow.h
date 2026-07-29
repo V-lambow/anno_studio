@@ -8,6 +8,7 @@
 #include <QSpinBox>
 #include <QLabel>
 #include <QComboBox>
+#include <QPushButton>
 #include "MyGraphics/mygraphicsview.h"
 #include "MyGraphics/painteditem.h"
 #include "MyGraphics/visibilitymanager.h"
@@ -60,6 +61,8 @@ public:
 private slots:
     void onPenWidthChanged(int width);
     void onLabelColorChanged(int index);
+    void onAddLabel();
+    void onRemoveLabel();
     void onCursorActionTriggered();
     // void onItemHovered(MyGraphicsItem *item);
     // void onSceneSelectionChanged();
@@ -143,6 +146,8 @@ private:
     // UI 组件指针
     QSpinBox *m_penWidthSpinBox;
     QComboBox *m_labelsComboBox;
+    QPushButton *m_addLabelBtn;
+    QPushButton *m_removeLabelBtn;
     
     // 状态显示
     QLabel *m_statusLabel;
