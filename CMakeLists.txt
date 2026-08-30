@@ -40,6 +40,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         saige/lib/SaigeVision.lib
         dlg/dlg_saigeinfer.ui
         dlg/dlg_saigeinfer.h dlg/dlg_saigeinfer.cpp dlg/dlg_saigeinfer.ui
+        dlg/dlg_ultrainfer.ui dlg/dlg_ultrainfer.h dlg/dlg_ultrainfer.cpp
         halcon/lib/halconcpp.lib
         halcon/lib/halcon.lib
         halcon/lib/halconc.lib

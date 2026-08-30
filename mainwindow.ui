@@ -222,6 +222,7 @@ border-color: rgb(255, 124, 64);</string>
      <string>推理</string>
     </property>
     <addaction name="actionsaige_infer"/>
+    <addaction name="actionultra_infer"/>
    </widget>
    <widget class="QMenu" name="menu_3">
     <property name="title">
@@ -271,8 +272,9 @@ border-color: rgb(255, 124, 64);</string>
    <addaction name="separator"/>
    <addaction name="actionadd_image"/>
    <addaction name="actionadd_imagefold"/>
-   <addaction name="separator"/>
-   <addaction name="actionsaige_infer"/>
+    <addaction name="separator"/>
+    <addaction name="actionsaige_infer"/>
+    <addaction name="actionultra_infer"/>
   </widget>
   <action name="actioncreate_newProject">
    <property name="icon">
@@ -443,12 +445,21 @@ border-color: rgb(255, 124, 64);</string>
     <string>推理结果导出为hdict</string>
    </property>
   </action>
-  <action name="actionoh_test">
-   <property name="text">
-    <string>oh_test</string>
-   </property>
-  </action>
- </widget>
+   <action name="actionoh_test">
+    <property name="text">
+     <string>oh_test</string>
+    </property>
+   </action>
+   <action name="actionultra_infer">
+    <property name="icon">
+     <iconset resource="resource/resourse.qrc">
+      <normaloff>:/img/ultralytics.ico</normaloff>:/img/ultralytics.ico</iconset>
+    </property>
+    <property name="text">
+     <string>Ultralytics推理</string>
+    </property>
+   </action>
+  </widget>
  <customwidgets>
   <customwidget>
    <class>MyGraphicsView</class>

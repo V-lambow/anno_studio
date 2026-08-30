@@ -1399,6 +1399,38 @@ void MainWindow::set_saigeInferPara(SaigeInferPara param)
 
 #include <QTimer> // 需要添加这个头文件
 
+void MainWindow::on_actionultra_infer_triggered()
+{
+    Ultrainfer dlg;
+    if (!m_curProjectPath.isEmpty()) {
+        dlg.setProjectName(QFileInfo(m_curProjectPath).fileName());
+    }
+    connect(&dlg, &Ultrainfer::sg_ultrainferPara, this, &MainWindow::set_ultrainferPara);
+    dlg.exec();
+}
+
+void MainWindow::set_ultrainferPara(UltrainferPara param)
+{
+    QMessageBox::information(this, "Ultralytics 参数",
+                             QString("模型路径: %1\n任务: %2\n设备: %3\n优化器: %4\n"
+                                     "余弦退火: %5\nEpochs: %6\nBatch: %7\nImgsz: %8\n"
+                                     "AMP: %9\nResume: %10\n置信度: %11\n"
+                                     "面积范围: %12 - %13")
+                                 .arg(param.modelPath)
+                                 .arg(param.task)
+                                 .arg(param.device)
+                                 .arg(param.optimizer)
+                                 .arg(param.cos_lr ? "是" : "否")
+                                 .arg(param.epochs)
+                                 .arg(param.batch)
+                                 .arg(param.imgsz)
+                                 .arg(param.amp ? "是" : "否")
+                                 .arg(param.resume ? "是" : "否")
+                                 .arg(param.confThreshold)
+                                 .arg(param.areaMin)
+                                 .arg(param.areaMax));
+}
+
 void MainWindow::on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1)
 {
     if (arg1 == Qt::Checked)

@@ -19,6 +19,7 @@
 #include <QListWidgetItem>
 #include <iostream>
 #include "dlg/dlg_saigeinfer.h"
+#include "dlg/dlg_ultrainfer.h"
 #include "saige/include/SaigeVisionUtil.h"
 #include <QMessageBox>
 #include <QRandomGenerator>
@@ -99,6 +100,10 @@ private slots:
     void on_actionsaige_infer_triggered();
 
     void set_saigeInferPara(SaigeInferPara param);
+
+    void on_actionultra_infer_triggered();
+
+    void set_ultrainferPara(UltrainferPara param);
 
     void on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1);
 
