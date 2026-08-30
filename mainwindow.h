@@ -141,6 +141,10 @@ private:
     void saveRoi();
     void loadRoi();
     void displayRoi();
+    void saveCategories();
+    void loadCategories();
+    void syncFilterComboBoxes();
+    void applyFilter();
 
 private:
     Ui::MainWindow *ui;
@@ -175,5 +179,9 @@ private:
     // ROI
     QRectF m_roiRect;
     RoiOverlayItem *m_roiOverlayItem = nullptr;
+
+    // 类别筛选
+    QStringList m_categories;
+    QStringList m_allImageFiles;
 };
 #endif // MAINWINDOW_H

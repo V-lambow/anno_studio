@@ -96,6 +96,13 @@ MainWindow::MainWindow(QWidget *parent)
         ui->graphicsView->setDragMode(QGraphicsView::ScrollHandDrag);
     });
 
+    /// 初始化筛选ComboBox
+    ui->labelFilterComboBox->addItem("全部");
+    ui->inferFilterComboBox->addItem("全部");
+    syncFilterComboBoxes();
+    connect(ui->labelFilterComboBox, &QComboBox::currentIndexChanged, this, [this](int) { applyFilter(); });
+    connect(ui->inferFilterComboBox, &QComboBox::currentIndexChanged, this, [this](int) { applyFilter(); });
+
     /// 待训练集右键菜单栏
     connect(ui->non_train_list, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showNon_trainlistMenu);
@@ -304,6 +311,8 @@ void MainWindow::onAddLabel()
                 QRandomGenerator::global()->bounded(256));
         m_labelsComboBox->addItem(nameEdit->text(), QVariant::fromValue(selectedColor));
         m_labelsComboBox->setCurrentIndex(m_labelsComboBox->count() - 1);
+        syncFilterComboBoxes();
+        saveCategories();
     }
 }
 
@@ -312,6 +321,8 @@ void MainWindow::onRemoveLabel()
     int idx = m_labelsComboBox->currentIndex();
     if (idx >= 0 && m_labelsComboBox->count() > 1) {
         m_labelsComboBox->removeItem(idx);
+        syncFilterComboBoxes();
+        saveCategories();
     }
 }
 
@@ -479,6 +490,9 @@ void MainWindow::on_actionopen_project_triggered()
     m_curProjectPath = projectPath;
     enableDrawActions(true);
     loadRoi();
+    loadCategories();
+    syncFilterComboBoxes();
+    m_allImageFiles.clear();
 
     // 定义要扫描的目录
     QString trainImagePath = projectPath + "/train/image";
@@ -694,10 +708,7 @@ void MainWindow::on_actionmoveinTrainlist_triggered()
     }
 
     // 强制刷新列表
-    ui->non_train_list->update();
-    ui->train_list->update();
-    ui->non_train_list->repaint();
-    ui->train_list->repaint();
+    applyFilter();
 
     if (!movedItemTexts.isEmpty())
     {
@@ -794,10 +805,7 @@ void MainWindow::on_actionremoveTrainlist_triggered()
     }
 
     // 强制刷新列表
-    ui->train_list->update();
-    ui->non_train_list->update();
-    ui->train_list->repaint();
-    ui->non_train_list->repaint();
+    applyFilter();
 
     if (!movedItemTexts.isEmpty())
     {
@@ -878,7 +886,10 @@ void MainWindow::on_actiondelete_non_trainlistele_triggered()
         delete ui->non_train_list->takeItem(row);
     }
 
-    // 5. 删除完成后提示结果
+    // 5. 刷新列表
+    applyFilter();
+
+    // 6. 删除完成后提示结果
     if (!deletedItems.isEmpty())
     {
         QMessageBox::information(this, "成功",
@@ -958,7 +969,10 @@ void MainWindow::on_actiondelete_trainlistele_triggered()
         delete ui->train_list->takeItem(row);
     }
 
-    // 5. 删除完成后提示结果
+    // 5. 刷新列表
+    applyFilter();
+
+    // 6. 删除完成后提示结果
     if (!deletedItems.isEmpty())
     {
         QMessageBox::information(this, "成功",
@@ -1763,15 +1777,12 @@ int MainWindow::nextMultipleOf32(int n)
 
 void MainWindow::add_non_train_list(QVector<QString> appendFiles)
 {
-
     for (const QString &file : appendFiles)
     {
-        //只要文件名，不要完整路径
         QString fileName = QFileInfo(file).fileName();
-        QListWidgetItem *item = new QListWidgetItem(fileName);
-        ui->non_train_list->addItem(item);
+        m_allImageFiles.append("non_train:" + fileName);
     }
-
+    applyFilter();
 }
 
 void MainWindow::on_actionadd_image_triggered()
@@ -2143,4 +2154,219 @@ void MainWindow::displayRoi()
     m_roiOverlayItem->setRoiRect(clampedRoi);
     m_roiOverlayItem->setZValue(1000);
     m_scene->addItem(m_roiOverlayItem);
+}
+
+void MainWindow::saveCategories()
+{
+    if (m_curProjectPath.isEmpty())
+        return;
+
+    // 读取现有JSON
+    QString jsonPath = m_curProjectPath + "/data_config.json";
+    Json::Value root;
+    Json::Reader reader;
+    QFile file(jsonPath);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QByteArray jsonData = file.readAll();
+        file.close();
+        reader.parse(jsonData.toStdString(), root);
+    }
+
+    // 保存类别
+    Json::Value categoriesArr;
+    for (const QString &cat : m_categories) {
+        categoriesArr.append(cat.toStdString());
+    }
+    root["categories"] = categoriesArr;
+
+    // 写入文件
+    Json::FastWriter writer;
+    std::string jsonStr = writer.write(root);
+    QFile outFile(jsonPath);
+    if (outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&outFile);
+        out << QString::fromStdString(jsonStr);
+    }
+}
+
+void MainWindow::loadCategories()
+{
+    if (m_curProjectPath.isEmpty())
+        return;
+
+    QString jsonPath = m_curProjectPath + "/data_config.json";
+    if (!QFile::exists(jsonPath))
+        return;
+
+    QFile file(jsonPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+
+    QByteArray jsonData = file.readAll();
+    file.close();
+
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(jsonData.toStdString(), root))
+        return;
+
+    if (root.isMember("categories")) {
+        m_categories.clear();
+        const Json::Value &arr = root["categories"];
+        for (Json::ArrayIndex i = 0; i < arr.size(); ++i) {
+            m_categories.append(QString::fromStdString(arr[i].asString()));
+        }
+
+        // 更新左侧标签ComboBox
+        m_labelsComboBox->clear();
+        // 默认颜色
+        QList<QColor> defaultColors = {Qt::red, Qt::green, Qt::blue, Qt::yellow, Qt::cyan, Qt::magenta};
+        for (int i = 0; i < m_categories.size(); ++i) {
+            QColor color = (i < defaultColors.size()) ? defaultColors[i] : QColor::fromHsv((i * 40) % 360, 200, 200);
+            m_labelsComboBox->addItem(m_categories[i], QVariant::fromValue(color));
+        }
+        if (m_labelsComboBox->count() > 0) {
+            m_labelsComboBox->setCurrentIndex(0);
+            QColor firstColor = m_labelsComboBox->itemData(0).value<QColor>();
+            ui->graphicsView->setPenColor(firstColor);
+            ui->graphicsView->setCurrentClassId(0);
+        }
+    }
+}
+
+void MainWindow::syncFilterComboBoxes()
+{
+    QString labelText = ui->labelFilterComboBox->currentText();
+    QString inferText = ui->inferFilterComboBox->currentText();
+
+    ui->labelFilterComboBox->blockSignals(true);
+    ui->inferFilterComboBox->blockSignals(true);
+
+    ui->labelFilterComboBox->clear();
+    ui->inferFilterComboBox->clear();
+
+    ui->labelFilterComboBox->addItem("全部");
+    ui->inferFilterComboBox->addItem("全部");
+
+    // 从m_labelsComboBox同步类别
+    m_categories.clear();
+    for (int i = 0; i < m_labelsComboBox->count(); ++i) {
+        QString name = m_labelsComboBox->itemText(i);
+        m_categories.append(name);
+        ui->labelFilterComboBox->addItem(name);
+        ui->inferFilterComboBox->addItem(name);
+    }
+
+    // 恢复之前的选择
+    int labelIdx = ui->labelFilterComboBox->findText(labelText);
+    ui->labelFilterComboBox->setCurrentIndex(labelIdx >= 0 ? labelIdx : 0);
+
+    int inferIdx = ui->inferFilterComboBox->findText(inferText);
+    ui->inferFilterComboBox->setCurrentIndex(inferIdx >= 0 ? inferIdx : 0);
+
+    ui->labelFilterComboBox->blockSignals(false);
+    ui->inferFilterComboBox->blockSignals(false);
+}
+
+void MainWindow::applyFilter()
+{
+    // 始终从磁盘重建文件列表
+    m_allImageFiles.clear();
+    if (!m_curProjectPath.isEmpty()) {
+        QDir nonTrainDir(m_curProjectPath + "/non_train/image");
+        QDir trainDir(m_curProjectPath + "/train/image");
+        QStringList filters = {"*.jpg", "*.png", "*.tiff", "*.jpeg", "*.bmp", "*.raw", "*.tif"};
+
+        QStringList nonTrainFiles = nonTrainDir.entryList(filters, QDir::Files);
+        for (const QString &f : nonTrainFiles)
+            m_allImageFiles.append("non_train:" + f);
+
+        QStringList trainFiles = trainDir.entryList(filters, QDir::Files);
+        for (const QString &f : trainFiles)
+            m_allImageFiles.append("train:" + f);
+    }
+
+    QString labelText = ui->labelFilterComboBox->currentText();
+    QString inferText = ui->inferFilterComboBox->currentText();
+    bool labelAll = (labelText == "全部");
+    bool inferAll = (inferText == "全部");
+
+    // 筛选non_train_list
+    ui->non_train_list->clear();
+    // 筛选train_list
+    ui->train_list->clear();
+
+    for (const QString &entry : m_allImageFiles) {
+        int colonPos = entry.indexOf(':');
+        QString folder = entry.left(colonPos);
+        QString fileName = entry.mid(colonPos + 1);
+        QString baseName = QFileInfo(fileName).baseName();
+
+        bool passLabel = labelAll;
+        bool passInfer = inferAll;
+
+        // 检查标注文件
+        if (!passLabel) {
+            QString labelDir = m_curProjectPath + "/" + folder + "/label";
+            QStringList labelExts = {"json", "xml", "txt"};
+            for (const QString &ext : labelExts) {
+                // 尝试 _labeling.json 格式
+                QString labelPath = QDir(labelDir).filePath(baseName + "_labeling." + ext);
+                if (!QFile::exists(labelPath)) {
+                    // 尝试 baseName.ext 格式
+                    labelPath = QDir(labelDir).filePath(baseName + "." + ext);
+                }
+                if (QFile::exists(labelPath) && ext == "json") {
+                    QFile file(labelPath);
+                    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        QByteArray data = file.readAll();
+                        file.close();
+                        Json::Value root;
+                        Json::Reader reader;
+                        if (reader.parse(data.toStdString(), root) && root.isArray()) {
+                            for (Json::ArrayIndex i = 0; i < root.size(); ++i) {
+                                if (root[i].isMember("classname") &&
+                                    QString::fromStdString(root[i]["classname"].asString()) == labelText) {
+                                    passLabel = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 检查推理文件
+        if (!passInfer) {
+            QString inferPath = m_curProjectPath + "/" + folder + "/image/" + baseName + "_infer.json";
+            if (QFile::exists(inferPath)) {
+                QFile file(inferPath);
+                if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    QByteArray data = file.readAll();
+                    file.close();
+                    Json::Value root;
+                    Json::Reader reader;
+                    if (reader.parse(data.toStdString(), root) && root.isArray()) {
+                        for (Json::ArrayIndex i = 0; i < root.size(); ++i) {
+                            if (root[i].isMember("classname") &&
+                                QString::fromStdString(root[i]["classname"].asString()) == inferText) {
+                                passInfer = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // AND逻辑：两个条件都要满足
+        if (passLabel && passInfer) {
+            if (folder == "non_train")
+                ui->non_train_list->addItem(fileName);
+            else
+                ui->train_list->addItem(fileName);
+        }
+    }
 }
