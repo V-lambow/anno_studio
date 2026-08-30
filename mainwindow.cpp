@@ -1405,17 +1405,35 @@ void MainWindow::on_actionultra_infer_triggered()
     if (!m_curProjectPath.isEmpty()) {
         dlg.setProjectName(QFileInfo(m_curProjectPath).fileName());
     }
-    connect(&dlg, &Ultrainfer::sg_ultrainferPara, this, &MainWindow::set_ultrainferPara);
+    connect(&dlg, &Ultrainfer::sg_train, this, &MainWindow::set_ultrainferTrainPara);
+    connect(&dlg, &Ultrainfer::sg_inferConfirm, this, &MainWindow::set_ultrainferInferPara);
+    connect(&dlg, &Ultrainfer::sg_refreshModels, this, [this](QStringList &models) {
+        if (m_curProjectPath.isEmpty())
+            return;
+
+        QDir projectDir(m_curProjectPath);
+        QStringList searchDirs = {"ultralytics/runs", "runs"};
+        for (const auto &dir : searchDirs) {
+            QDir inferDir = projectDir;
+            if (inferDir.cd(dir) && inferDir.cd("detect")) {
+                for (const auto &entry : inferDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+                    QString weightsPath = entry.filePath() + "/weights/best.pt";
+                    if (QFile::exists(weightsPath)) {
+                        models.append(weightsPath);
+                    }
+                }
+            }
+        }
+    });
     dlg.exec();
 }
 
-void MainWindow::set_ultrainferPara(UltrainferPara param)
+void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
 {
-    QMessageBox::information(this, "Ultralytics 参数",
+    QMessageBox::information(this, "Ultralytics 训练参数",
                              QString("模型路径: %1\n任务: %2\n设备: %3\n优化器: %4\n"
                                      "余弦退火: %5\nEpochs: %6\nBatch: %7\nImgsz: %8\n"
-                                     "AMP: %9\nResume: %10\n置信度: %11\n"
-                                     "面积范围: %12 - %13")
+                                     "AMP: %9\nResume: %10")
                                  .arg(param.modelPath)
                                  .arg(param.task)
                                  .arg(param.device)
@@ -1425,10 +1443,28 @@ void MainWindow::set_ultrainferPara(UltrainferPara param)
                                  .arg(param.batch)
                                  .arg(param.imgsz)
                                  .arg(param.amp ? "是" : "否")
-                                 .arg(param.resume ? "是" : "否")
+                                 .arg(param.resume ? "是" : "否"));
+}
+
+void MainWindow::set_ultrainferInferPara(UltrainferInferPara param)
+{
+    QMessageBox::information(this, "Ultralytics 推理参数",
+                             QString("推理模型: %1\n置信度阈值: %2 (%3)\n"
+                                     "面积阈值: %4 (%5 - %6)")
+                                 .arg(param.modelPath)
+                                 .arg(param.useConf ? "启用" : "禁用")
                                  .arg(param.confThreshold)
+                                 .arg(param.useArea ? "启用" : "禁用")
                                  .arg(param.areaMin)
                                  .arg(param.areaMax));
+}
+
+void MainWindow::on_ultra_batchInfer(UltrainferBatchInferPara param)
+{
+    QMessageBox::information(this, "Ultralytics 批量推理",
+                             QString("非训练集: %1\n训练集: %2")
+                                 .arg(param.useNonTrain ? "是" : "否")
+                                 .arg(param.useTrain ? "是" : "否"));
 }
 
 void MainWindow::on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1)

@@ -103,7 +103,9 @@ private slots:
 
     void on_actionultra_infer_triggered();
 
-    void set_ultrainferPara(UltrainferPara param);
+    void set_ultrainferTrainPara(UltrainferTrainPara param);
+    void set_ultrainferInferPara(UltrainferInferPara param);
+    void on_ultra_batchInfer(UltrainferBatchInferPara param);
 
     void on_infer_ckBox_checkStateChanged(const Qt::CheckState &arg1);
 

@@ -8,7 +8,7 @@ namespace Ui {
 class Ultrainfer;
 }
 
-struct UltrainferPara {
+struct UltrainferTrainPara {
     QString modelPath;
     QString task;
     QString device;
@@ -19,22 +19,25 @@ struct UltrainferPara {
     int imgsz{640};
     bool amp{true};
     bool resume{false};
-    QString projectName;
-    bool existOk{false};
+};
 
-    // 过滤参数
+struct UltrainferInferPara {
+    QString modelPath;
     bool useConf{false};
     double confThreshold{0.25};
     bool useArea{false};
     int areaMin{100};
     int areaMax{100000};
-
-    // 批量推理
-    bool isInfer_trainList{false};
-    bool isInfer_nontrainList{false};
 };
 
-Q_DECLARE_METATYPE(UltrainferPara);
+Q_DECLARE_METATYPE(UltrainferTrainPara);
+struct UltrainferBatchInferPara {
+    bool useNonTrain{false};
+    bool useTrain{false};
+};
+
+Q_DECLARE_METATYPE(UltrainferInferPara);
+Q_DECLARE_METATYPE(UltrainferBatchInferPara);
 
 class Ultrainfer : public QDialog
 {
@@ -45,20 +48,25 @@ public:
     ~Ultrainfer();
 
     void setProjectName(const QString &name);
+    void setInferModelList(const QStringList &models);
 
 private slots:
     void on_modelPath_btn_clicked();
-    void on_buttonBox_accepted();
-
+    void on_train_startBtn_clicked();
+    void on_infer_confirmBtn_clicked();
+    void on_inferModel_refreshBtn_clicked();
+    void on_batchInfer_startBtn_clicked();
     void batchInferBt(bool checked);
 
 private:
     Ui::Ultrainfer *ui;
-    UltrainferPara param_;
+    QString projectName_;
 
 signals:
-    void sg_ultrainferPara(UltrainferPara);
-    void sg_batchInfer(bool, bool);
+    void sg_train(UltrainferTrainPara);
+    void sg_inferConfirm(UltrainferInferPara);
+    void sg_batchInfer(UltrainferBatchInferPara);
+    void sg_refreshModels(QStringList &models);
 };
 
 #endif // DLG_ULTRAINFER_H

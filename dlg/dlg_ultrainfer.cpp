@@ -15,7 +15,13 @@ Ultrainfer::~Ultrainfer()
 
 void Ultrainfer::setProjectName(const QString &name)
 {
-    param_.projectName = name;
+    projectName_ = name;
+}
+
+void Ultrainfer::setInferModelList(const QStringList &models)
+{
+    ui->inferModel_cbBox->clear();
+    ui->inferModel_cbBox->addItems(models);
 }
 
 void Ultrainfer::on_modelPath_btn_clicked()
@@ -25,37 +31,61 @@ void Ultrainfer::on_modelPath_btn_clicked()
         tr("PyTorch 模型 (*.pt);;ONNX 模型 (*.onnx);;所有文件 (*)"));
     if (!fileName.isEmpty()) {
         ui->modelPath_lineEdit->setText(fileName);
-        param_.modelPath = fileName;
     }
 }
 
-void Ultrainfer::on_buttonBox_accepted()
+void Ultrainfer::on_train_startBtn_clicked()
 {
-    param_.modelPath = ui->modelPath_lineEdit->text();
-    param_.task = ui->task_cbBox->currentText();
-    param_.device = ui->device_cbBox->currentText();
-    param_.optimizer = ui->optimizer_cbBox->currentText();
-    param_.cos_lr = ui->cos_lr_ckBox->isChecked();
-    param_.epochs = ui->epochs_spinBox->value();
-    param_.batch = ui->batch_spinBox->value();
-    param_.imgsz = ui->imgsz_spinBox->value();
-    param_.amp = ui->amp_ckBox->isChecked();
-    param_.resume = ui->resume_ckBox->isChecked();
+    UltrainferTrainPara param;
+    param.modelPath = ui->modelPath_lineEdit->text();
+    param.task = ui->task_cbBox->currentText();
+    param.device = ui->device_cbBox->currentText();
+    param.optimizer = ui->optimizer_cbBox->currentText();
+    param.cos_lr = ui->cos_lr_ckBox->isChecked();
+    param.epochs = ui->epochs_spinBox->value();
+    param.batch = ui->batch_spinBox->value();
+    param.imgsz = ui->imgsz_spinBox->value();
+    param.amp = ui->amp_ckBox->isChecked();
+    param.resume = ui->resume_ckBox->isChecked();
 
-    param_.useConf = ui->conf_ckBox->isChecked();
-    param_.confThreshold = ui->conf_spinBox->value();
-    param_.useArea = ui->area_ckBox->isChecked();
-    param_.areaMin = ui->areaMin_spinBox->value();
-    param_.areaMax = ui->areaMax_spinBox->value();
-
-    if (param_.modelPath.isEmpty())
+    if (param.modelPath.isEmpty())
         return;
 
-    emit sg_ultrainferPara(param_);
-    if (ui->isBatchInferButton->isChecked()) {
-        emit sg_batchInfer(ui->non_trainInfer_ckBox->isChecked(),
-                           ui->trainInfer_ckBox->isChecked());
-    }
+    emit sg_train(param);
+}
+
+void Ultrainfer::on_infer_confirmBtn_clicked()
+{
+    UltrainferInferPara param;
+    param.modelPath = ui->inferModel_cbBox->currentText();
+    param.useConf = ui->conf_ckBox->isChecked();
+    param.confThreshold = ui->conf_spinBox->value();
+    param.useArea = ui->area_ckBox->isChecked();
+    param.areaMin = ui->areaMin_spinBox->value();
+    param.areaMax = ui->areaMax_spinBox->value();
+
+    if (param.modelPath.isEmpty())
+        return;
+
+    emit sg_inferConfirm(param);
+}
+
+void Ultrainfer::on_inferModel_refreshBtn_clicked()
+{
+    QStringList models;
+    emit sg_refreshModels(models);
+    setInferModelList(models);
+}
+
+void Ultrainfer::on_batchInfer_startBtn_clicked()
+{
+    if (!ui->isBatchInferButton->isChecked())
+        return;
+
+    UltrainferBatchInferPara param;
+    param.useNonTrain = ui->non_trainInfer_ckBox->isChecked();
+    param.useTrain = ui->trainInfer_ckBox->isChecked();
+    emit sg_batchInfer(param);
 }
 
 void Ultrainfer::batchInferBt(bool checked)
