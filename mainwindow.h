@@ -34,6 +34,7 @@
 #include <QProcess>
 #include <QFuture>
 #include <variant>
+#include "MyGraphics/roioverlayitem.h"
 
 
 
@@ -118,6 +119,7 @@ private slots:
     void on_actionoh_test_triggered();
     void saveLabelingData();
     void mergeOverlappingStrokes();
+    void on_actionCreateRoi_triggered();
 
 signals:
     void sg_imageInfo_label(QString,int,int);
@@ -136,6 +138,9 @@ private:
     int nextMultipleOf32(int n);
     void add_non_train_list(QVector<QString> appendFiles);
     std::variant<std::monostate,QString> saigeMoelInit(SaigeInferPara param);
+    void saveRoi();
+    void loadRoi();
+    void displayRoi();
 
 private:
     Ui::MainWindow *ui;
@@ -162,8 +167,13 @@ private:
 
     LabelInfo m_curLabelInfo;
     IMAGEINFO m_displayedImageInfo;
+    QImage m_currentImage;
 
     VisibilityManager *m_visibilityMgr;
     QList<PaintedItem*> m_labelingItems;
+
+    // ROI
+    QRectF m_roiRect;
+    RoiOverlayItem *m_roiOverlayItem = nullptr;
 };
 #endif // MAINWINDOW_H

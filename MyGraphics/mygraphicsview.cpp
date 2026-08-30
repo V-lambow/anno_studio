@@ -74,6 +74,13 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
 {
 
     if (e->button() == Qt::RightButton) {
+        if (m_cursorMode == CURSOR_MODE::create_roi) {
+            m_cursorMode = CURSOR_MODE::origin;
+            m_roiDrawing = false;
+            m_roiPreviewRect = QRectF();
+            viewport()->update();
+            return;
+        }
         this->m_isDragging = true;
         this->m_DraggingPos = e->pos(); // 保存视图坐标，不是场景坐标
         // setCursor(Qt::ClosedHandCursor);
@@ -92,7 +99,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
         e->accept();
         return;
     }
-    case  CURSOR_MODE::pen_brush:{
+    case CURSOR_MODE::pen_brush:{
         if (!m_drawEffectEnabled) break;
         StrokeItem *target = new StrokeItem(m_penColor, m_penWidth, m_currentClassId);
         m_strokeItems.append(target);
@@ -101,6 +108,13 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
         m_currentStroke->addPoint(scenePos, true);
         m_isDrawing = true;
         m_currentStroke->setZValue(0);
+        return;
+    }
+    case CURSOR_MODE::create_roi:{
+        m_roiStartPos = scenePos;
+        m_roiDrawing = true;
+        m_roiPreviewRect = QRectF(scenePos, scenePos);
+        e->accept();
         return;
     }
     default:
@@ -116,6 +130,12 @@ void MyGraphicsView::mouseMoveEvent(QMouseEvent *e)
     QPointF scenePos = mapToScene(e->pos());
     emit this->sg_mouseMoved(scenePos);
     
+    if (m_cursorMode == CURSOR_MODE::create_roi && m_roiDrawing) {
+        m_roiPreviewRect = QRectF(m_roiStartPos, scenePos).normalized();
+        viewport()->update();
+        return;
+    }
+
     ///右键拖拽功能
     if (this->m_isDragging && (e->buttons() & Qt::RightButton)) {
         // 计算移动的距离（使用视图坐标差值，然后转换为场景距离）
@@ -152,6 +172,18 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
         return; // 不要调用基类函数，避免冲突
     }
     if (e->button() == Qt::LeftButton) {
+        if (m_cursorMode == CURSOR_MODE::create_roi && m_roiDrawing) {
+            m_roiDrawing = false;
+            QRectF roiRect = m_roiPreviewRect;
+            m_roiPreviewRect = QRectF();
+            m_cursorMode = CURSOR_MODE::origin;
+            setCursor(Qt::ArrowCursor);
+            viewport()->update();
+            if (roiRect.width() > 5 && roiRect.height() > 5) {
+                emit sg_roiDrawn(roiRect);
+            }
+            return;
+        }
         if (m_isDrawing) {
             m_currentStroke = nullptr;
             m_isDrawing = false;
@@ -177,6 +209,11 @@ void MyGraphicsView::drawForeground(QPainter *painter, const QRectF &rect)
         painter->setBrush(QBrush(Qt::white, Qt::Dense4Pattern));
         painter->setPen(QPen(Qt::red, 1, Qt::DashLine));
         painter->drawEllipse(m_lastMousePos, m_penWidth, m_penWidth);
+    }
+    if (m_cursorMode == CURSOR_MODE::create_roi && !m_roiPreviewRect.isNull()) {
+        painter->setPen(QPen(Qt::black, 2, Qt::DashLine));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRect(m_roiPreviewRect);
     }
 }
 
@@ -204,6 +241,7 @@ void MyGraphicsView::updateCursor()
     switch (m_cursorMode) {
     case CURSOR_MODE::pen_brush:
     case CURSOR_MODE::eraser:
+    case CURSOR_MODE::create_roi:
         setCursor(Qt::CrossCursor);
         break;
     default:

@@ -35,6 +35,7 @@ signals:
     void sg_mouseMoved(const QPointF& pt);
     void sg_drawingFinished();
     void sg_itemErasedCompletely(StrokeItem *item);
+    void sg_roiDrawn(const QRectF &rect);
 
     // void itemHovered(MyGraphicsItem *item);
 
@@ -69,6 +70,11 @@ private:
     bool m_isErasing=false;
     QList<StrokeItem*> m_strokeItems; // 存储所有笔迹项
     StrokeItem* m_currentStroke =nullptr;
+
+    // ROI绘制
+    QPointF m_roiStartPos;
+    QRectF m_roiPreviewRect;
+    bool m_roiDrawing = false;
 
 };
 #endif // MYGRAPHICSVIEW_H

@@ -9,6 +9,7 @@ enum class CURSOR_MODE
     origin = 0,
     pen_brush = 1,
     eraser = 2,
+    create_roi = 3,
 };
 
 enum class DLTASK

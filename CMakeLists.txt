@@ -48,6 +48,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         utils/src/base_source.cpp
         MyGraphics/inferpattern.h MyGraphics/inferpattern.cpp
         MyGraphics/visibilitymanager.h MyGraphics/visibilitymanager.cpp
+        MyGraphics/roioverlayitem.h
 
 
     )

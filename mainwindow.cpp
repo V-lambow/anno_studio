@@ -87,17 +87,74 @@ MainWindow::MainWindow(QWidget *parent)
     penToolBar->addAction(ui->actionCreateRoi);
     enableDrawActions(false);
 
+    /// CreateRoi信号连接
+    connect(ui->actionCreateRoi, &QAction::triggered, this, &MainWindow::on_actionCreateRoi_triggered);
+    connect(ui->graphicsView, &MyGraphicsView::sg_roiDrawn, this, [this](const QRectF &rect) {
+        m_roiRect = rect;
+        saveRoi();
+        displayRoi();
+        ui->graphicsView->setDragMode(QGraphicsView::ScrollHandDrag);
+    });
+
     /// 待训练集右键菜单栏
     connect(ui->non_train_list, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showNon_trainlistMenu);
     connect(ui->train_list, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showtrainlistMenu);
 
-    /// 实时显示坐标
-    QLabel *pixLabel = new QLabel("当前坐标:(X,Y)", this);
+    /// 实时显示坐标和像素值
+    QLabel *pixLabel = new QLabel("(row,col)", this);
     ui->statusbar->addWidget(pixLabel);
-    connect(ui->graphicsView, &MyGraphicsView::sg_mouseMoved, this, [pixLabel](const QPointF &pt)
-            { pixLabel->setText(QString("当前坐标:( %1 , %2 )").arg(pt.y()).arg(pt.x())); });
+    connect(ui->graphicsView, &MyGraphicsView::sg_mouseMoved, this, [pixLabel, this](const QPointF &pt)
+            {
+                int row = static_cast<int>(pt.y());
+                int col = static_cast<int>(pt.x());
+                if (m_currentImage.isNull() || row < 0 || row >= m_currentImage.height()
+                    || col < 0 || col >= m_currentImage.width())
+                {
+                    pixLabel->setText(QString("(row=%1, col=%2)").arg(row).arg(col));
+                    return;
+                }
+                QImage::Format fmt = m_currentImage.format();
+                if (fmt == QImage::Format_Grayscale8)
+                {
+                    const auto *line = reinterpret_cast<const quint8*>(m_currentImage.constScanLine(row));
+                    pixLabel->setText(QString("(%1,%2):(gray=%3)").arg(row).arg(col).arg(line[col]));
+                }
+                else if (fmt == QImage::Format_Grayscale16)
+                {
+                    const auto *line = reinterpret_cast<const quint16*>(m_currentImage.constScanLine(row));
+                    pixLabel->setText(QString("(%1,%2):(gray=%3)").arg(row).arg(col).arg(line[col]));
+                }
+                else if (fmt == QImage::Format_RGBA32FPx4 || fmt == QImage::Format_RGBA32FPx4_Premultiplied)
+                {
+                    const auto *line = reinterpret_cast<const float*>(m_currentImage.constScanLine(row));
+                    int off = col * 4;
+                    pixLabel->setText(QString("(%1,%2):(r=%3, g=%4, b=%5)")
+                                          .arg(row).arg(col)
+                                          .arg(line[off], 0, 'f', 4)
+                                          .arg(line[off + 1], 0, 'f', 4)
+                                          .arg(line[off + 2], 0, 'f', 4));
+                }
+                else if (fmt == QImage::Format_RGBA64 || fmt == QImage::Format_RGBX64
+                         || fmt == QImage::Format_RGBA64_Premultiplied)
+                {
+                    const auto *line = reinterpret_cast<const QRgba64*>(m_currentImage.constScanLine(row));
+                    QRgba64 c = line[col];
+                    pixLabel->setText(QString("(%1,%2):(r=%3, g=%4, b=%5)")
+                                          .arg(row).arg(col).arg(c.red()).arg(c.green()).arg(c.blue()));
+                }
+                else
+                {
+                    QColor c = m_currentImage.pixelColor(col, row);
+                    bool isGray = m_currentImage.allGray();
+                    if (isGray)
+                        pixLabel->setText(QString("(%1,%2):(gray=%3)").arg(row).arg(col).arg(c.lightness()));
+                    else
+                        pixLabel->setText(QString("(%1,%2):(r=%3, g=%4, b=%5)")
+                                              .arg(row).arg(col).arg(c.red()).arg(c.green()).arg(c.blue()));
+                }
+            });
 
     /// 实时显示图像信息
     connect(this, &MainWindow::sg_imageInfo_label, this, [this](QString imagePath, int height, int width)
@@ -421,6 +478,7 @@ void MainWindow::on_actionopen_project_triggered()
     ui->train_list->clear();
     m_curProjectPath = projectPath;
     enableDrawActions(true);
+    loadRoi();
 
     // 定义要扫描的目录
     QString trainImagePath = projectPath + "/train/image";
@@ -941,8 +999,10 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
     m_scene->clear();
     m_labelingItems.clear();
     m_displayedImageInfo.clear();
+    m_roiOverlayItem = nullptr;
     // 添加图像到场景
     QGraphicsPixmapItem *pixmapItem = m_scene->addPixmap(pixmap);
+    m_currentImage = pixmap.toImage();
     emit sg_imageInfo_label(imagePath, pixmap.height(), pixmap.width());
 
     // 5. 配置视图属性（可选）
@@ -956,6 +1016,9 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
     // 允许缩放和平移（如果需要）
     ui->graphicsView->setDragMode(QGraphicsView::ScrollHandDrag); // 拖动平移
     ui->graphicsView->setResizeAnchor(QGraphicsView::AnchorViewCenter);
+
+    // 显示ROI
+    displayRoi();
 
     // 进行推理
 
@@ -1018,6 +1081,7 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
                 //清空当前图像
                 m_scene->clear();
                 m_labelingItems.clear();
+                m_roiOverlayItem = nullptr;
                 QPixmap ienPix = QPixmap::fromImage( (std::get<QImage>(resInfer)));
                 m_scene->addPixmap(ienPix);
             }
@@ -1109,10 +1173,12 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
         ui->graphicsView->clearStrokes();
         scene->clear();
         m_labelingItems.clear();
+        m_roiOverlayItem = nullptr;
     }
 
     // 添加图像到场景
     QGraphicsPixmapItem *pixmapItem = scene->addPixmap(pixmap);
+    m_currentImage = pixmap.toImage();
     emit sg_imageInfo_label(imagePath, pixmap.height(), pixmap.width());
 
     // 5. 配置视图属性
@@ -1121,6 +1187,9 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
     ui->graphicsView->fitInView(pixmapItem, Qt::KeepAspectRatio);
     ui->graphicsView->setDragMode(QGraphicsView::ScrollHandDrag); // 支持拖动
     ui->graphicsView->setResizeAnchor(QGraphicsView::AnchorViewCenter);
+
+    // 显示ROI
+    displayRoi();
 
     // 进行推理
     m_curLabelInfo.clear();
@@ -1182,6 +1251,7 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
                 //清空当前图像
                 scene->clear();
                 m_labelingItems.clear();
+                m_roiOverlayItem = nullptr;
                 QPixmap ienPix = QPixmap::fromImage( (std::get<QImage>(resInfer)));
                 scene->addPixmap(ienPix);
             }
@@ -1975,4 +2045,102 @@ std::variant<std::monostate,QString> MainWindow::saigeMoelInit(SaigeInferPara pa
 
 
 
+}
+
+void MainWindow::on_actionCreateRoi_triggered()
+{
+    if (m_curProjectPath.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先打开项目");
+        return;
+    }
+    if (m_currentImage.isNull()) {
+        QMessageBox::warning(this, "警告", "请先加载图像");
+        return;
+    }
+    ui->graphicsView->switchCursorMode(CURSOR_MODE::create_roi);
+    ui->graphicsView->setDragMode(QGraphicsView::NoDrag);
+    ui->graphicsView->updateCursor();
+}
+
+void MainWindow::saveRoi()
+{
+    if (m_curProjectPath.isEmpty())
+        return;
+
+    Json::Value root;
+    Json::Value roiObj;
+    roiObj["x"] = m_roiRect.x();
+    roiObj["y"] = m_roiRect.y();
+    roiObj["width"] = m_roiRect.width();
+    roiObj["height"] = m_roiRect.height();
+    root["roi"] = roiObj;
+
+    Json::FastWriter writer;
+    std::string jsonStr = writer.write(root);
+
+    QString jsonPath = m_curProjectPath + "/data_config.json";
+    QFile file(jsonPath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << QString::fromStdString(jsonStr);
+    }
+}
+
+void MainWindow::loadRoi()
+{
+    if (m_curProjectPath.isEmpty())
+        return;
+
+    QString jsonPath = m_curProjectPath + "/data_config.json";
+    if (!QFile::exists(jsonPath)) {
+        m_roiRect = QRectF();
+        return;
+    }
+
+    QFile file(jsonPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+
+    QByteArray jsonData = file.readAll();
+    file.close();
+
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(jsonData.toStdString(), root))
+        return;
+
+    if (root.isMember("roi")) {
+        Json::Value roiObj = root["roi"];
+        m_roiRect = QRectF(
+            roiObj["x"].asDouble(),
+            roiObj["y"].asDouble(),
+            roiObj["width"].asDouble(),
+            roiObj["height"].asDouble());
+    } else {
+        m_roiRect = QRectF();
+    }
+}
+
+void MainWindow::displayRoi()
+{
+    // 移除旧的overlay
+    if (m_roiOverlayItem) {
+        m_scene->removeItem(m_roiOverlayItem);
+        delete m_roiOverlayItem;
+        m_roiOverlayItem = nullptr;
+    }
+
+    if (m_roiRect.isNull() || m_currentImage.isNull())
+        return;
+
+    // 裁剪ROI到图像范围内
+    QRectF imageRect(0, 0, m_currentImage.width(), m_currentImage.height());
+    QRectF clampedRoi = m_roiRect.intersected(imageRect);
+
+    // 创建overlay
+    m_roiOverlayItem = new RoiOverlayItem();
+    m_roiOverlayItem->setImageRect(imageRect);
+    m_roiOverlayItem->setRoiRect(clampedRoi);
+    m_roiOverlayItem->setZValue(1000);
+    m_scene->addItem(m_roiOverlayItem);
 }
