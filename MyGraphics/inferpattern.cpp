@@ -37,17 +37,16 @@ void InferPattern::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
     painter->setPen(QPen(color_, 2));
     painter->setBrush(QBrush(color_, Qt::SolidPattern));
 
-    // 如果有足够的点，绘制多边形
     if (labelele_.pts.size() >= 2) {
         QPolygonF polygon;
         for (const auto& point : labelele_.pts) {
             polygon.append(point);
         }
         painter->drawPolygon(polygon);
-    }
-    // 如果只有一个点，绘制圆点
-    else if (labelele_.pts.size() == 1) {
+    } else if (labelele_.pts.size() == 1) {
         painter->drawEllipse(labelele_.pts[0], 5, 5);
+    } else if (!labelele_.bbox.isNull() && labelele_.bbox.isValid()) {
+        painter->drawRect(labelele_.bbox);
     }
 
     // 恢复画笔状态

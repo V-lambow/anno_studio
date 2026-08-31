@@ -6,6 +6,7 @@
 #include "painteditem.h"
 #include "rectitem.h"
 #include "inferpattern.h"
+#include <QKeyEvent>
 #include <QWheelEvent>
 #include <QDebug>
 #include <QPoint>
@@ -49,6 +50,7 @@ protected:
     void mousePressEvent(QMouseEvent *e) override;
     void mouseMoveEvent(QMouseEvent *e) override;
     void mouseReleaseEvent(QMouseEvent *e) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void drawForeground(QPainter *painter, const QRectF &rect) override;
     void Translate(QPointF delta);
     virtual void wheelEvent(QWheelEvent *e) override;

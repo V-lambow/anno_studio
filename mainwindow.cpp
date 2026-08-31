@@ -242,8 +242,13 @@ void MainWindow::enableDrawActions(bool enabled)
 {
     ui->actioncursor->setEnabled(enabled);
     ui->actionpen_brush->setEnabled(enabled);
+    ui->actioncreate_rect->setEnabled(enabled);
     ui->actioneraser->setEnabled(enabled);
     ui->actionCreateRoi->setEnabled(enabled);
+    ui->actionadd_image->setEnabled(enabled);
+    ui->actionadd_imagefold->setEnabled(enabled);
+    ui->actionsaige_infer->setEnabled(enabled && m_saigeAvailable);
+    ui->actionultra_infer->setEnabled(enabled);
 }
 
 void MainWindow::onPenWidthChanged(int width)

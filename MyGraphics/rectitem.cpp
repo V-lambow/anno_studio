@@ -1,5 +1,4 @@
 #include "rectitem.h"
-#include <QKeyEvent>
 #include <QGraphicsScene>
 
 RectItem::RectItem(QColor color, int penSize, int classId, QGraphicsItem *parent)
@@ -169,18 +168,6 @@ void RectItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
     m_activeHandle = None;
     QGraphicsRectItem::mouseReleaseEvent(event);
-}
-
-void RectItem::keyPressEvent(QKeyEvent *event)
-{
-    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-        if (scene()) {
-            scene()->removeItem(this);
-            delete this;
-            return;
-        }
-    }
-    QGraphicsRectItem::keyPressEvent(event);
 }
 
 QVariant RectItem::itemChange(GraphicsItemChange change, const QVariant &value)

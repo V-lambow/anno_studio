@@ -160,6 +160,15 @@ void StrokeItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
         painter->setPen(pen());
     }
     painter->drawPath(m_path);
+
+    if (isSelected()) {
+        QPen selPen(QColor(0, 120, 215), pen().widthF() + 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        selPen.setColor(QColor(0, 120, 215, 180));
+        painter->setPen(selPen);
+        painter->setBrush(Qt::NoBrush);
+        painter->drawPath(m_path);
+    }
+
     painter->restore();
 }
 

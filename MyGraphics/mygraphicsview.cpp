@@ -265,17 +265,20 @@ void MyGraphicsView::doErase(const QPointF &scenePos)
 
 void MyGraphicsView::updateCursor()
 {
+    Qt::CursorShape shape;
     switch (m_cursorMode) {
     case CURSOR_MODE::pen_brush:
     case CURSOR_MODE::eraser:
     case CURSOR_MODE::create_roi:
     case CURSOR_MODE::create_rect:
-        setCursor(Qt::CrossCursor);
+        shape = Qt::CrossCursor;
         break;
     default:
-        setCursor(Qt::ArrowCursor);
+        shape = Qt::ArrowCursor;
         break;
     }
+    setCursor(shape);
+    viewport()->setCursor(shape);
 }
 
 QList<QPair<int, QVector<QVector<QPointF>>>> MyGraphicsView::getAllStrokesOutlineData() const
@@ -338,5 +341,31 @@ void MyGraphicsView::clearRects()
 void MyGraphicsView::removeRect(RectItem *rect)
 {
     m_rectItems.removeOne(rect);
+}
+
+void MyGraphicsView::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
+    {
+        const auto selected = scene()->selectedItems();
+        for (QGraphicsItem *item : selected)
+        {
+            if (StrokeItem *stroke = qgraphicsitem_cast<StrokeItem*>(item))
+            {
+                m_strokeItems.removeOne(stroke);
+                scene()->removeItem(stroke);
+                delete stroke;
+            }
+            else if (RectItem *rect = qgraphicsitem_cast<RectItem*>(item))
+            {
+                m_rectItems.removeOne(rect);
+                scene()->removeItem(rect);
+                delete rect;
+            }
+        }
+        event->accept();
+        return;
+    }
+    QGraphicsView::keyPressEvent(event);
 }
 
