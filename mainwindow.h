@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <qapplication.h>
 #include <qgraphicsitem.h>
+#include <QKeyEvent>
+#include <QShortcut>
 #include <QToolBar>
 #include <QSpinBox>
 #include <QLabel>
@@ -143,6 +145,8 @@ signals:
 private:
     void setupGraphicsView();
     void enableDrawActions(bool enabled);
+    void setupShortcuts();
+    void navigateList(int delta);
 
     void showSegInferLabel();
     void showLabelingPatterns();
@@ -197,5 +201,6 @@ private:
     // 类别筛选
     QStringList m_categories;
     QStringList m_allImageFiles;
+    QListWidget *m_activeList = nullptr;
 };
 #endif // MAINWINDOW_H

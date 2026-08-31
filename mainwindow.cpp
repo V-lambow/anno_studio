@@ -237,6 +237,7 @@ MainWindow::MainWindow(QWidget *parent)
         ui->infer_ckBox->setEnabled(false);
         qDebug() << "SaigeVision.dll not found - Saige features disabled";
     }
+    setupShortcuts();
 }
 
 void MainWindow::enableDrawActions(bool enabled)
@@ -593,6 +594,7 @@ void MainWindow::on_actionopen_project_triggered()
 
 void MainWindow::on_non_train_list_itemPressed(QListWidgetItem *item)
 {
+    m_activeList = ui->non_train_list;
 }
 
 void MainWindow::showNon_trainlistMenu(const QPoint &pos)
@@ -1031,6 +1033,7 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
 {
     if (!item)
         return; // 防御性检查
+    m_activeList = ui->non_train_list;
 
     // 1. 获取图像文件路径
     QString fileName = item->text();
@@ -1196,6 +1199,7 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
 {
     if (!item)
         return; // 防御性检查
+    m_activeList = ui->train_list;
 
     // 1. 获取训练集图像文件路径
     QString fileName = item->text();
@@ -2266,6 +2270,42 @@ void MainWindow::saveLabelingData()
         QTextStream out(&file);
         out << QString::fromStdString(jsonStr);
     }
+}
+
+void MainWindow::setupShortcuts()
+{
+    auto bind = [&](const QKeySequence &key, auto slot) {
+        auto *sc = new QShortcut(key, this);
+        connect(sc, &QShortcut::activated, this, slot);
+    };
+
+    bind(Qt::Key_A, [this]{ navigateList(-1); });
+    bind(Qt::Key_D, [this]{ navigateList(1); });
+    bind(Qt::Key_Q, [this]{ ui->actioncreate_rect->trigger(); });
+    bind(Qt::Key_C, [this]{ ui->actioncursor->trigger(); });
+    bind(Qt::Key_E, [this]{ ui->actionpen_brush->trigger(); });
+    bind(Qt::Key_R, [this]{ ui->actionCreateRoi->trigger(); });
+    bind(Qt::Key_W, [this]{ m_penWidthSpinBox->setValue(m_penWidthSpinBox->value() + 1); });
+    bind(Qt::Key_S, [this]{ m_penWidthSpinBox->setValue(qMax(1, m_penWidthSpinBox->value() - 1)); });
+    bind(Qt::Key_X, [this]{
+        if (m_labelsComboBox->count() == 0) return;
+        int next = (m_labelsComboBox->currentIndex() + 1) % m_labelsComboBox->count();
+        m_labelsComboBox->setCurrentIndex(next);
+    });
+}
+
+void MainWindow::navigateList(int delta)
+{
+    QListWidget *list = m_activeList;
+    if (!list || list->count() == 0) return;
+
+    int row = list->currentRow();
+    int newRow = row + delta;
+    if (newRow < 0 || newRow >= list->count()) return;
+
+    saveLabelingData();
+    list->setCurrentRow(newRow);
+    emit list->itemDoubleClicked(list->item(newRow));
 }
 
 void MainWindow::on_actionoh_test_triggered()

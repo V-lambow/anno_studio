@@ -1,4 +1,5 @@
 #include "mygraphicsview.h"
+#include <QScrollBar>
 
 
 // MyGraphicsView 实现
@@ -34,28 +35,25 @@ void MyGraphicsView::setFactor(int factor)
 
 void MyGraphicsView::wheelEvent(QWheelEvent *e)
 {
-    // Calculate wheel movement
-    int distance = e->angleDelta().y()/15/8;
-    qreal val;
-
-    if (distance != 0)
-    {
-        val = pow(1.2, distance);
-        this->scale(val, val);
-        if (distance > 0)
-        {
-            factor_ ++;
-        }
-        else
-        {
-            factor_ --;
-        }
+    if (!(e->modifiers() & Qt::ControlModifier)) {
+        QGraphicsView::wheelEvent(e);
+        return;
     }
-    // viewport()->update();
-    // if(m_currentStroke){
-    // this->m_currentStroke->setZValue(0);
-    // }
 
+    const double factor = 1.15;
+    double direction = (e->angleDelta().y() > 0) ? factor : 1.0 / factor;
+
+    QPointF cursorPos = e->position();
+    QPointF sceneBefore = mapToScene(cursorPos.toPoint());
+
+    scale(direction, direction);
+
+    QPointF sceneAfter = mapToScene(cursorPos.toPoint());
+    QPointF delta = sceneAfter - sceneBefore;
+    horizontalScrollBar()->setValue(horizontalScrollBar()->value() - int(delta.x()));
+    verticalScrollBar()->setValue(verticalScrollBar()->value() - int(delta.y()));
+
+    e->accept();
 }
 
 void MyGraphicsView::Translate(QPointF delta){
