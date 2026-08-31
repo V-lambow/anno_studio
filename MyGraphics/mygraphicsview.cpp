@@ -117,6 +117,19 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
         e->accept();
         return;
     }
+    case CURSOR_MODE::create_rect:{
+        if (!m_drawEffectEnabled) break;
+        m_rectStartPos = scenePos;
+        RectItem *rect = new RectItem(m_penColor, m_penWidth, m_currentClassId);
+        m_rectItems.append(rect);
+        scene()->addItem(rect);
+        m_currentRect = rect;
+        m_currentRect->setRectFromPoints(scenePos, scenePos);
+        m_isDrawing = true;
+        m_currentRect->setZValue(0);
+        e->accept();
+        return;
+    }
     default:
         break;
     }
@@ -132,6 +145,12 @@ void MyGraphicsView::mouseMoveEvent(QMouseEvent *e)
     
     if (m_cursorMode == CURSOR_MODE::create_roi && m_roiDrawing) {
         m_roiPreviewRect = QRectF(m_roiStartPos, scenePos).normalized();
+        viewport()->update();
+        return;
+    }
+
+    if (m_cursorMode == CURSOR_MODE::create_rect && m_isDrawing && m_currentRect) {
+        m_currentRect->setRectFromPoints(m_rectStartPos, scenePos);
         viewport()->update();
         return;
     }
@@ -184,6 +203,13 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
             }
             return;
         }
+        if (m_cursorMode == CURSOR_MODE::create_rect && m_isDrawing) {
+            m_currentRect = nullptr;
+            m_isDrawing = false;
+            emit sg_drawingFinished();
+            e->accept();
+            return;
+        }
         if (m_isDrawing) {
             m_currentStroke = nullptr;
             m_isDrawing = false;
@@ -200,6 +226,7 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
     }
 
     QGraphicsView::mouseReleaseEvent(e);
+    updateCursor();
 }
 
 void MyGraphicsView::drawForeground(QPainter *painter, const QRectF &rect)
@@ -242,6 +269,7 @@ void MyGraphicsView::updateCursor()
     case CURSOR_MODE::pen_brush:
     case CURSOR_MODE::eraser:
     case CURSOR_MODE::create_roi:
+    case CURSOR_MODE::create_rect:
         setCursor(Qt::CrossCursor);
         break;
     default:
@@ -280,5 +308,35 @@ void MyGraphicsView::clearStrokes()
 void MyGraphicsView::removeStroke(StrokeItem *stroke)
 {
     m_strokeItems.removeOne(stroke);
+}
+
+QList<QPair<int, QVector<QPointF>>> MyGraphicsView::getAllRectData() const
+{
+    QList<QPair<int, QVector<QPointF>>> result;
+    for (const auto* rect : m_rectItems) {
+        QVector<QPointF> points;
+        QRectF r = rect->rect();
+        points.append(rect->mapToScene(r.topLeft()));
+        points.append(rect->mapToScene(r.topRight()));
+        points.append(rect->mapToScene(r.bottomRight()));
+        points.append(rect->mapToScene(r.bottomLeft()));
+        result.append({rect->classId(), std::move(points)});
+    }
+    return result;
+}
+
+void MyGraphicsView::clearRects()
+{
+    for (auto* rect : m_rectItems) {
+        scene()->removeItem(rect);
+        delete rect;
+    }
+    m_rectItems.clear();
+    m_currentRect = nullptr;
+}
+
+void MyGraphicsView::removeRect(RectItem *rect)
+{
+    m_rectItems.removeOne(rect);
 }
 

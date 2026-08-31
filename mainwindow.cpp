@@ -3,6 +3,43 @@
 #include <QToolBar>
 #include <QSpinBox>
 #include <QLabel>
+#include <QStyledItemDelegate>
+#include <QPainter>
+
+class ColorDelegate : public QStyledItemDelegate
+{
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override
+    {
+        painter->save();
+        if (option.state & QStyle::State_Selected)
+            painter->fillRect(option.rect, option.palette.highlight());
+        else if (option.state & QStyle::State_MouseOver)
+            painter->fillRect(option.rect, option.palette.light());
+
+        QColor color = index.data(Qt::UserRole).value<QColor>();
+        if (color.isValid()) {
+            QRect colorRect(option.rect.left() + 4, option.rect.top() + 3, 14, 14);
+            painter->setPen(Qt::gray);
+            painter->setBrush(color);
+            painter->drawRect(colorRect);
+        }
+
+        QRect textRect = option.rect.adjusted(22, 0, 0, 0);
+        painter->setPen(option.state & QStyle::State_Selected ? option.palette.highlightedText().color() : option.palette.text().color());
+        painter->drawText(textRect, Qt::AlignVCenter, index.data(Qt::DisplayRole).toString());
+        painter->restore();
+    }
+
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        Q_UNUSED(option); Q_UNUSED(index);
+        return QSize(0, 22);
+    }
+};
 #include <QComboBox>
 #include <QVariant>
 #include <QDebug>
@@ -42,6 +79,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 添加标签下拉栏
     m_labelsComboBox = new QComboBox(this);
+    m_labelsComboBox->setItemDelegate(new ColorDelegate(m_labelsComboBox));
     m_labelsComboBox->addItem("阳极", QVariant::fromValue(QColor(Qt::red)));
     m_labelsComboBox->addItem("阴极", QVariant::fromValue(QColor(Qt::green)));
     m_labelsComboBox->addItem("其他", QVariant::fromValue(QColor(Qt::blue)));
@@ -81,6 +119,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     penToolBar->addAction(ui->actioncursor);
     penToolBar->addAction(ui->actionpen_brush);
+    penToolBar->addAction(ui->actioncreate_rect);
     penToolBar->addAction(ui->actioneraser);
     penToolBar->addSeparator();
 
@@ -1010,6 +1049,7 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
     }
 
     ui->graphicsView->clearStrokes();
+    ui->graphicsView->clearRects();
     m_scene->clear();
     m_labelingItems.clear();
     m_displayedImageInfo.clear();
@@ -1185,6 +1225,7 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
     {
         // 清除现有内容
         ui->graphicsView->clearStrokes();
+        ui->graphicsView->clearRects();
         scene->clear();
         m_labelingItems.clear();
         m_roiOverlayItem = nullptr;
@@ -1288,6 +1329,11 @@ void MainWindow::on_actioncursor_triggered()
 void MainWindow::on_actionpen_brush_triggered()
 {
     ui->graphicsView->switchCursorMode(CURSOR_MODE::pen_brush);
+}
+
+void MainWindow::on_actioncreate_rect_triggered()
+{
+    ui->graphicsView->switchCursorMode(CURSOR_MODE::create_rect);
 }
 
 void MainWindow::on_actionsaige_infer_triggered()
@@ -1404,6 +1450,8 @@ void MainWindow::on_actionultra_infer_triggered()
     Ultrainfer dlg;
     if (!m_curProjectPath.isEmpty()) {
         dlg.setProjectName(QFileInfo(m_curProjectPath).fileName());
+        QString jsonPath = m_curProjectPath + "/model_param.json";
+        dlg.loadFromJson(jsonPath);
     }
     connect(&dlg, &Ultrainfer::sg_train, this, &MainWindow::set_ultrainferTrainPara);
     connect(&dlg, &Ultrainfer::sg_inferConfirm, this, &MainWindow::set_ultrainferInferPara);
@@ -1426,6 +1474,11 @@ void MainWindow::on_actionultra_infer_triggered()
         }
     });
     dlg.exec();
+
+    if (!m_curProjectPath.isEmpty()) {
+        QString jsonPath = m_curProjectPath + "/model_param.json";
+        dlg.saveToJson(jsonPath);
+    }
 }
 
 void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
@@ -1604,10 +1657,17 @@ void MainWindow::showLabelingPatterns()
         }
         if (pts.size() < 3) continue;
 
-        StrokeItem *item = new StrokeItem(color, 3, classId);
-        item->setPolygonFromPoints(pts);
-        m_scene->addItem(item);
-        m_labelingItems.append(item);
+        if (pts.size() == 4) {
+            RectItem *item = new RectItem(color, 3, classId);
+            item->setRectFromPoints(pts[0], pts[2]);
+            m_scene->addItem(item);
+            m_labelingItems.append(item);
+        } else {
+            StrokeItem *item = new StrokeItem(color, 3, classId);
+            item->setPolygonFromPoints(pts);
+            m_scene->addItem(item);
+            m_labelingItems.append(item);
+        }
     }
 }
 
@@ -1970,43 +2030,72 @@ void MainWindow::saveLabelingData()
     const auto &items = m_scene->items();
     for (QGraphicsItem *item : items) {
         StrokeItem *stroke = dynamic_cast<StrokeItem*>(item);
-        if (!stroke) continue;
+        if (stroke) {
+            auto outlines = stroke->getOutlinePoints();
+            QString className = m_labelsComboBox->itemText(stroke->classId());
 
-        auto outlines = stroke->getOutlinePoints();
-        QString className = m_labelsComboBox->itemText(stroke->classId());
+            for (auto &poly : outlines) {
+                if (poly.size() < 3) continue;
 
-        for (auto &poly : outlines) {
-            if (poly.size() < 3) continue;
+                Json::Value obj;
+                obj["classname"] = className.toStdString();
+
+                double area = 0.0;
+                int n = poly.size();
+                for (int i = 0; i < n; i++) {
+                    int j = (i + 1) % n;
+                    area += poly[i].x() * poly[j].y();
+                    area -= poly[j].x() * poly[i].y();
+                }
+                obj["area"] = (unsigned int)(std::abs(area) / 2.0);
+
+                qreal minX = poly[0].x(), maxX = poly[0].x();
+                qreal minY = poly[0].y(), maxY = poly[0].y();
+                for (const auto& pt : poly) {
+                    minX = qMin(minX, pt.x());
+                    maxX = qMax(maxX, pt.x());
+                    minY = qMin(minY, pt.y());
+                    maxY = qMax(maxY, pt.y());
+                }
+
+                obj["bbox"] = Json::Value(Json::arrayValue);
+                obj["bbox"].append(minX);
+                obj["bbox"].append(minY);
+                obj["bbox"].append(maxX - minX);
+                obj["bbox"].append(maxY - minY);
+
+                obj["points"] = Json::Value(Json::arrayValue);
+                for (const auto& pt : poly) {
+                    Json::Value pnt;
+                    pnt.append(pt.x());
+                    pnt.append(pt.y());
+                    obj["points"].append(pnt);
+                }
+
+                root.append(obj);
+            }
+        }
+
+        RectItem *rect = dynamic_cast<RectItem*>(item);
+        if (rect) {
+            QString className = m_labelsComboBox->itemText(rect->classId());
+            QVector<QPointF> points = rect->getCornerPoints();
 
             Json::Value obj;
             obj["classname"] = className.toStdString();
 
-            double area = 0.0;
-            int n = poly.size();
-            for (int i = 0; i < n; i++) {
-                int j = (i + 1) % n;
-                area += poly[i].x() * poly[j].y();
-                area -= poly[j].x() * poly[i].y();
-            }
-            obj["area"] = (unsigned int)(std::abs(area) / 2.0);
-
-            qreal minX = poly[0].x(), maxX = poly[0].x();
-            qreal minY = poly[0].y(), maxY = poly[0].y();
-            for (const auto& pt : poly) {
-                minX = qMin(minX, pt.x());
-                maxX = qMax(maxX, pt.x());
-                minY = qMin(minY, pt.y());
-                maxY = qMax(maxY, pt.y());
-            }
+            QRectF r = rect->rect();
+            qreal area = r.width() * r.height();
+            obj["area"] = (unsigned int)(std::abs(area));
 
             obj["bbox"] = Json::Value(Json::arrayValue);
-            obj["bbox"].append(minX);
-            obj["bbox"].append(minY);
-            obj["bbox"].append(maxX - minX);
-            obj["bbox"].append(maxY - minY);
+            obj["bbox"].append(r.x());
+            obj["bbox"].append(r.y());
+            obj["bbox"].append(r.width());
+            obj["bbox"].append(r.height());
 
             obj["points"] = Json::Value(Json::arrayValue);
-            for (const auto& pt : poly) {
+            for (const auto& pt : points) {
                 Json::Value pnt;
                 pnt.append(pt.x());
                 pnt.append(pt.y());

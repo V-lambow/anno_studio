@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QFileDialog>
+#include <json/json.h>
 
 namespace Ui {
 class Ultrainfer;
@@ -49,6 +50,8 @@ public:
 
     void setProjectName(const QString &name);
     void setInferModelList(const QStringList &models);
+    void loadFromJson(const QString &jsonPath);
+    void saveToJson(const QString &jsonPath);
 
 private slots:
     void on_modelPath_btn_clicked();

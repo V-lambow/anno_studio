@@ -4,6 +4,7 @@
 #include <QGraphicsView>
 #include <QMouseEvent>
 #include "painteditem.h"
+#include "rectitem.h"
 #include "inferpattern.h"
 #include <QWheelEvent>
 #include <QDebug>
@@ -25,11 +26,16 @@ public:
     int getFactor();
     void setFactor(int _factor);
     void resetCursorMode(){m_cursorMode=CURSOR_MODE::origin;};
-    void switchCursorMode(CURSOR_MODE mode){m_cursorMode=mode;};
+    void switchCursorMode(CURSOR_MODE mode){m_cursorMode=mode; updateCursor();};
     void setDrawEffectEnabled(bool enabled) { m_drawEffectEnabled = enabled; }
     QList<QPair<int, QVector<QVector<QPointF>>>> getAllStrokesOutlineData() const;
     void clearStrokes();
     void removeStroke(StrokeItem *stroke);
+
+    // 矩形相关方法
+    QList<QPair<int, QVector<QPointF>>> getAllRectData() const;
+    void clearRects();
+    void removeRect(RectItem *rect);
 
 signals:
     void sg_mouseMoved(const QPointF& pt);
@@ -70,6 +76,11 @@ private:
     bool m_isErasing=false;
     QList<StrokeItem*> m_strokeItems; // 存储所有笔迹项
     StrokeItem* m_currentStroke =nullptr;
+
+    // 矩形绘制
+    QPointF m_rectStartPos;
+    RectItem* m_currentRect = nullptr;
+    QList<RectItem*> m_rectItems;
 
     // ROI绘制
     QPointF m_roiStartPos;

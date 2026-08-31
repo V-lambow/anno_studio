@@ -10,6 +10,7 @@ enum class CURSOR_MODE
     pen_brush = 1,
     eraser = 2,
     create_roi = 3,
+    create_rect = 4,
 };
 
 enum class DLTASK

@@ -1,5 +1,7 @@
 #include "dlg_ultrainfer.h"
 #include "ui_dlg_ultrainfer.h"
+#include <QFile>
+#include <QTextStream>
 
 Ultrainfer::Ultrainfer(QWidget *parent)
     : QDialog(parent), ui(new Ui::Ultrainfer)
@@ -92,4 +94,101 @@ void Ultrainfer::batchInferBt(bool checked)
 {
     ui->non_trainInfer_ckBox->setEnabled(checked);
     ui->trainInfer_ckBox->setEnabled(checked);
+}
+
+void Ultrainfer::loadFromJson(const QString &jsonPath)
+{
+    if (!QFile::exists(jsonPath))
+        return;
+
+    QFile file(jsonPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+
+    QByteArray jsonData = file.readAll();
+    file.close();
+
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(jsonData.toStdString(), root))
+        return;
+
+    if (root.isMember("train")) {
+        Json::Value trainObj = root["train"];
+        if (trainObj.isMember("modelPath"))
+            ui->modelPath_lineEdit->setText(QString::fromStdString(trainObj["modelPath"].asString()));
+        if (trainObj.isMember("task")) {
+            int idx = ui->task_cbBox->findText(QString::fromStdString(trainObj["task"].asString()));
+            if (idx >= 0) ui->task_cbBox->setCurrentIndex(idx);
+        }
+        if (trainObj.isMember("device")) {
+            int idx = ui->device_cbBox->findText(QString::fromStdString(trainObj["device"].asString()));
+            if (idx >= 0) ui->device_cbBox->setCurrentIndex(idx);
+        }
+        if (trainObj.isMember("optimizer")) {
+            int idx = ui->optimizer_cbBox->findText(QString::fromStdString(trainObj["optimizer"].asString()));
+            if (idx >= 0) ui->optimizer_cbBox->setCurrentIndex(idx);
+        }
+        if (trainObj.isMember("cos_lr"))
+            ui->cos_lr_ckBox->setChecked(trainObj["cos_lr"].asBool());
+        if (trainObj.isMember("epochs"))
+            ui->epochs_spinBox->setValue(trainObj["epochs"].asInt());
+        if (trainObj.isMember("batch"))
+            ui->batch_spinBox->setValue(trainObj["batch"].asInt());
+        if (trainObj.isMember("imgsz"))
+            ui->imgsz_spinBox->setValue(trainObj["imgsz"].asInt());
+        if (trainObj.isMember("amp"))
+            ui->amp_ckBox->setChecked(trainObj["amp"].asBool());
+        if (trainObj.isMember("resume"))
+            ui->resume_ckBox->setChecked(trainObj["resume"].asBool());
+    }
+
+    if (root.isMember("infer")) {
+        Json::Value inferObj = root["infer"];
+        if (inferObj.isMember("conf_ckBox"))
+            ui->conf_ckBox->setChecked(inferObj["conf_ckBox"].asBool());
+        if (inferObj.isMember("confThreshold"))
+            ui->conf_spinBox->setValue(inferObj["confThreshold"].asDouble());
+        if (inferObj.isMember("area_ckBox"))
+            ui->area_ckBox->setChecked(inferObj["area_ckBox"].asBool());
+        if (inferObj.isMember("areaMin"))
+            ui->areaMin_spinBox->setValue(inferObj["areaMin"].asInt());
+        if (inferObj.isMember("areaMax"))
+            ui->areaMax_spinBox->setValue(inferObj["areaMax"].asInt());
+    }
+}
+
+void Ultrainfer::saveToJson(const QString &jsonPath)
+{
+    Json::Value root;
+
+    Json::Value trainObj;
+    trainObj["modelPath"] = ui->modelPath_lineEdit->text().toStdString();
+    trainObj["task"] = ui->task_cbBox->currentText().toStdString();
+    trainObj["device"] = ui->device_cbBox->currentText().toStdString();
+    trainObj["optimizer"] = ui->optimizer_cbBox->currentText().toStdString();
+    trainObj["cos_lr"] = ui->cos_lr_ckBox->isChecked();
+    trainObj["epochs"] = ui->epochs_spinBox->value();
+    trainObj["batch"] = ui->batch_spinBox->value();
+    trainObj["imgsz"] = ui->imgsz_spinBox->value();
+    trainObj["amp"] = ui->amp_ckBox->isChecked();
+    trainObj["resume"] = ui->resume_ckBox->isChecked();
+    root["train"] = trainObj;
+
+    Json::Value inferObj;
+    inferObj["conf_ckBox"] = ui->conf_ckBox->isChecked();
+    inferObj["confThreshold"] = ui->conf_spinBox->value();
+    inferObj["area_ckBox"] = ui->area_ckBox->isChecked();
+    inferObj["areaMin"] = ui->areaMin_spinBox->value();
+    inferObj["areaMax"] = ui->areaMax_spinBox->value();
+    root["infer"] = inferObj;
+
+    Json::FastWriter writer;
+    std::string jsonStr = writer.write(root);
+
+    QFile file(jsonPath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << QString::fromStdString(jsonStr);
+    }
 }

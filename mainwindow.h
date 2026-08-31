@@ -97,6 +97,8 @@ private slots:
 
     void on_actionpen_brush_triggered();
 
+    void on_actioncreate_rect_triggered();
+
     void on_actionsaige_infer_triggered();
 
     void set_saigeInferPara(SaigeInferPara param);
@@ -181,7 +183,7 @@ private:
     QImage m_currentImage;
 
     VisibilityManager *m_visibilityMgr;
-    QList<PaintedItem*> m_labelingItems;
+    QList<QGraphicsItem*> m_labelingItems;
 
     // ROI
     QRectF m_roiRect;

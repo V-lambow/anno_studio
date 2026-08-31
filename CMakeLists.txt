@@ -35,6 +35,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MyGraphics/mygraphicsscene.h MyGraphics/mygraphicsscene.cpp
         MyGraphics/mygraphicsview.h MyGraphics/mygraphicsview.cpp
         MyGraphics/painteditem.h MyGraphics/painteditem.cpp
+        MyGraphics/rectitem.h MyGraphics/rectitem.cpp
 
         saige/include/saige_error.h saige/include/SaigeVisionAPI.h saige/include/SaigeVisionAPI_V1.h saige/include/SaigeVisionUtil.h
         saige/lib/SaigeVision.lib
