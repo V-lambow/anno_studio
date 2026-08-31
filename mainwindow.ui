@@ -230,10 +230,15 @@ border-color: rgb(255, 124, 64);</string>
     </property>
     <addaction name="actioninferPattern_xml"/>
     <addaction name="actioninferPattern_json"/>
-    <addaction name="actioninferPattern_hdict"/>
-    <addaction name="actioninferPattern_txt"/>
-    <addaction name="separator"/>
-    <addaction name="separator"/>
+     <addaction name="actioninferPattern_hdict"/>
+     <addaction name="actioninferPattern_txt"/>
+     <addaction name="separator"/>
+     <addaction name="actionExportYoloHBB"/>
+     <addaction name="actionExportYoloSeg"/>
+     <addaction name="actionExportVocDet"/>
+     <addaction name="actionExportVocSeg"/>
+     <addaction name="actionExportCocoDet"/>
+     <addaction name="actionExportCocoSeg"/>
    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">
@@ -403,7 +408,7 @@ border-color: rgb(255, 124, 64);</string>
   <action name="actioncreate_rect">
    <property name="icon">
     <iconset resource="resource/resourse.qrc">
-     <normaloff>:/img/rectangle-dot.svg</normaloff>:/img/rectangle-dot.svg</iconset>
+     <normaloff>:/img/square.svg</normaloff>:/img/square.svg</iconset>
    </property>
    <property name="text">
     <string>矩形标注</string>
@@ -464,15 +469,45 @@ border-color: rgb(255, 124, 64);</string>
     <string>oh_test</string>
    </property>
   </action>
-  <action name="actionultra_infer">
-   <property name="icon">
-    <iconset resource="resource/resourse.qrc">
-     <normaloff>:/img/ultralytics.ico</normaloff>:/img/ultralytics.ico</iconset>
-   </property>
-   <property name="text">
-    <string>Ultralytics推理</string>
-   </property>
-  </action>
+   <action name="actionultra_infer">
+    <property name="icon">
+     <iconset resource="resource/resourse.qrc">
+      <normaloff>:/img/ultralytics.ico</normaloff>:/img/ultralytics.ico</iconset>
+    </property>
+    <property name="text">
+     <string>Ultralytics推理</string>
+    </property>
+   </action>
+   <action name="actionExportYoloHBB">
+    <property name="text">
+     <string>导出YOLO-HBB (矩形)</string>
+    </property>
+   </action>
+   <action name="actionExportYoloSeg">
+    <property name="text">
+     <string>导出YOLO-Seg (多边形)</string>
+    </property>
+   </action>
+   <action name="actionExportVocDet">
+    <property name="text">
+     <string>导出VOC检测 (矩形)</string>
+    </property>
+   </action>
+   <action name="actionExportVocSeg">
+    <property name="text">
+     <string>导出VOC分割 (多边形)</string>
+    </property>
+   </action>
+   <action name="actionExportCocoDet">
+    <property name="text">
+     <string>导出COCO检测 (矩形)</string>
+    </property>
+   </action>
+   <action name="actionExportCocoSeg">
+    <property name="text">
+     <string>导出COCO分割 (多边形)</string>
+    </property>
+   </action>
  </widget>
  <customwidgets>
   <customwidget>

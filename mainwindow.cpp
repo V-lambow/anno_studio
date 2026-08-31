@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QStyledItemDelegate>
 #include <QPainter>
+#include "utils/include/label_exporter.h"
 
 class ColorDelegate : public QStyledItemDelegate
 {
@@ -1906,6 +1907,142 @@ int MainWindow::nextMultipleOf32(int n)
     {
         return (n / 32 + 1) * 32;
     }
+}
+
+void MainWindow::on_actionExportYoloHBB_triggered()
+{
+    if (m_displayedImageInfo.imagePath.isEmpty()) {
+        QMessageBox::warning(this, "Warning", "No image loaded");
+        return;
+    }
+    QString dir = QFileDialog::getExistingDirectory(this, "Select Export Directory");
+    if (dir.isEmpty()) return;
+
+    QList<AnnoRect> rects;
+    QList<AnnoPolygon> polygons;
+    LabelExporter::collectFromScene(m_scene, m_labelsComboBox, rects, polygons);
+
+    QStringList classes;
+    for (int i = 0; i < m_labelsComboBox->count(); ++i)
+        classes.append(m_labelsComboBox->itemText(i));
+
+    bool ok = LabelExporter::exportYoloHBB(dir, m_displayedImageInfo.imagePath,
+                                           m_displayedImageInfo.width, m_displayedImageInfo.height,
+                                           rects, classes);
+    QMessageBox::information(this, "Result", ok ? "Export succeeded" : "Export failed");
+}
+
+void MainWindow::on_actionExportYoloSeg_triggered()
+{
+    if (m_displayedImageInfo.imagePath.isEmpty()) {
+        QMessageBox::warning(this, "Warning", "No image loaded");
+        return;
+    }
+    QString dir = QFileDialog::getExistingDirectory(this, "Select Export Directory");
+    if (dir.isEmpty()) return;
+
+    QList<AnnoRect> rects;
+    QList<AnnoPolygon> polygons;
+    LabelExporter::collectFromScene(m_scene, m_labelsComboBox, rects, polygons);
+
+    QStringList classes;
+    for (int i = 0; i < m_labelsComboBox->count(); ++i)
+        classes.append(m_labelsComboBox->itemText(i));
+
+    bool ok = LabelExporter::exportYoloSeg(dir, m_displayedImageInfo.imagePath,
+                                           m_displayedImageInfo.width, m_displayedImageInfo.height,
+                                           polygons, classes);
+    QMessageBox::information(this, "Result", ok ? "Export succeeded" : "Export failed");
+}
+
+void MainWindow::on_actionExportVocDet_triggered()
+{
+    if (m_displayedImageInfo.imagePath.isEmpty()) {
+        QMessageBox::warning(this, "Warning", "No image loaded");
+        return;
+    }
+    QString dir = QFileDialog::getExistingDirectory(this, "Select Export Directory");
+    if (dir.isEmpty()) return;
+
+    QList<AnnoRect> rects;
+    QList<AnnoPolygon> polygons;
+    LabelExporter::collectFromScene(m_scene, m_labelsComboBox, rects, polygons);
+
+    bool ok = LabelExporter::exportVocDetection(dir, m_displayedImageInfo.imagePath,
+                                                m_displayedImageInfo.width, m_displayedImageInfo.height,
+                                                rects);
+    QMessageBox::information(this, "Result", ok ? "Export succeeded" : "Export failed");
+}
+
+void MainWindow::on_actionExportVocSeg_triggered()
+{
+    if (m_displayedImageInfo.imagePath.isEmpty()) {
+        QMessageBox::warning(this, "Warning", "No image loaded");
+        return;
+    }
+    QString dir = QFileDialog::getExistingDirectory(this, "Select Export Directory");
+    if (dir.isEmpty()) return;
+
+    QList<AnnoRect> rects;
+    QList<AnnoPolygon> polygons;
+    LabelExporter::collectFromScene(m_scene, m_labelsComboBox, rects, polygons);
+
+    bool ok = LabelExporter::exportVocSegmentation(dir, m_displayedImageInfo.imagePath,
+                                                   m_displayedImageInfo.width, m_displayedImageInfo.height,
+                                                   polygons);
+    QMessageBox::information(this, "Result", ok ? "Export succeeded" : "Export failed");
+}
+
+void MainWindow::on_actionExportCocoDet_triggered()
+{
+    QString jsonPath = QFileDialog::getSaveFileName(this, "Save COCO Detection JSON",
+                                                    m_curProjectPath, "JSON (*.json)");
+    if (jsonPath.isEmpty()) return;
+
+    QStringList classes;
+    for (int i = 0; i < m_labelsComboBox->count(); ++i)
+        classes.append(m_labelsComboBox->itemText(i));
+
+    QStringList imgNames;
+    QList<QPair<int,int>> imgSizes;
+    QList<QList<AnnoRect>> allRects;
+
+    QList<AnnoRect> rects;
+    QList<AnnoPolygon> polygons;
+    LabelExporter::collectFromScene(m_scene, m_labelsComboBox, rects, polygons);
+
+    imgNames.append(m_displayedImageInfo.imagePath);
+    imgSizes.append({m_displayedImageInfo.width, m_displayedImageInfo.height});
+    allRects.append(rects);
+
+    bool ok = LabelExporter::exportCocoDetection(jsonPath, imgNames, imgSizes, allRects, classes);
+    QMessageBox::information(this, "Result", ok ? "Export succeeded" : "Export failed");
+}
+
+void MainWindow::on_actionExportCocoSeg_triggered()
+{
+    QString jsonPath = QFileDialog::getSaveFileName(this, "Save COCO Segmentation JSON",
+                                                    m_curProjectPath, "JSON (*.json)");
+    if (jsonPath.isEmpty()) return;
+
+    QStringList classes;
+    for (int i = 0; i < m_labelsComboBox->count(); ++i)
+        classes.append(m_labelsComboBox->itemText(i));
+
+    QStringList imgNames;
+    QList<QPair<int,int>> imgSizes;
+    QList<QList<AnnoPolygon>> allPolygons;
+
+    QList<AnnoRect> rects;
+    QList<AnnoPolygon> polygons;
+    LabelExporter::collectFromScene(m_scene, m_labelsComboBox, rects, polygons);
+
+    imgNames.append(m_displayedImageInfo.imagePath);
+    imgSizes.append({m_displayedImageInfo.width, m_displayedImageInfo.height});
+    allPolygons.append(polygons);
+
+    bool ok = LabelExporter::exportCocoSegmentation(jsonPath, imgNames, imgSizes, allPolygons, classes);
+    QMessageBox::information(this, "Result", ok ? "Export succeeded" : "Export failed");
 }
 
 void MainWindow::add_non_train_list(QVector<QString> appendFiles)

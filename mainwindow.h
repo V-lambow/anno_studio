@@ -119,7 +119,12 @@ private slots:
 
     void on_actioninferPattern_hdict_triggered();
 
-
+    void on_actionExportYoloHBB_triggered();
+    void on_actionExportYoloSeg_triggered();
+    void on_actionExportVocDet_triggered();
+    void on_actionExportVocSeg_triggered();
+    void on_actionExportCocoDet_triggered();
+    void on_actionExportCocoSeg_triggered();
 
     void on_actionadd_image_triggered();
 

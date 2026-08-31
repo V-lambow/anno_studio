@@ -51,6 +51,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MyGraphics/inferpattern.h MyGraphics/inferpattern.cpp
         MyGraphics/visibilitymanager.h MyGraphics/visibilitymanager.cpp
         MyGraphics/roioverlayitem.h
+        utils/include/label_exporter.h utils/src/label_exporter.cpp
 
 
     )
