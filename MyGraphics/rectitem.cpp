@@ -135,6 +135,22 @@ void RectItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
     QGraphicsRectItem::mousePressEvent(event);
 }
 
+QRectF RectItem::clampRectToBoundary(const QRectF &r) const
+{
+    if (m_boundary.isNull())
+        return r;
+    QRectF result = r;
+    if (result.left() < m_boundary.left())
+        result.moveLeft(m_boundary.left());
+    if (result.top() < m_boundary.top())
+        result.moveTop(m_boundary.top());
+    if (result.right() > m_boundary.right())
+        result.moveRight(m_boundary.right());
+    if (result.bottom() > m_boundary.bottom())
+        result.moveBottom(m_boundary.bottom());
+    return result;
+}
+
 void RectItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
     if (m_activeHandle == None || m_activeHandle == Interior) {
@@ -157,7 +173,7 @@ void RectItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
     default: break;
     }
 
-    r = r.normalized();
+    r = clampRectToBoundary(r.normalized());
     if (r.width() > 2 && r.height() > 2)
         setRect(r);
 
@@ -172,5 +188,13 @@ void RectItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 
 QVariant RectItem::itemChange(GraphicsItemChange change, const QVariant &value)
 {
+    if (change == ItemPositionChange && !m_boundary.isNull()) {
+        QPointF newPos = value.toPointF();
+        QRectF r = rect();
+        QRectF newRect(newPos.x() + r.left(), newPos.y() + r.top(), r.width(), r.height());
+        newRect = clampRectToBoundary(newRect);
+        QPointF clampedPos(newRect.left() - r.left(), newRect.top() - r.top());
+        return clampedPos;
+    }
     return QGraphicsRectItem::itemChange(change, value);
 }

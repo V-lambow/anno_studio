@@ -99,6 +99,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
     }
     case CURSOR_MODE::pen_brush:{
         if (!m_drawEffectEnabled) break;
+        scenePos = clampToBounds(scenePos);
         StrokeItem *target = new StrokeItem(m_penColor, m_penWidth, m_currentClassId);
         m_strokeItems.append(target);
         scene()->addItem(target);
@@ -117,8 +118,10 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
     }
     case CURSOR_MODE::create_rect:{
         if (!m_drawEffectEnabled) break;
+        scenePos = clampToBounds(scenePos);
         m_rectStartPos = scenePos;
         RectItem *rect = new RectItem(m_penColor, m_penWidth, m_currentClassId);
+        rect->setBoundary(m_drawBounds);
         m_rectItems.append(rect);
         scene()->addItem(rect);
         m_currentRect = rect;
@@ -148,9 +151,15 @@ void MyGraphicsView::mouseMoveEvent(QMouseEvent *e)
     }
 
     if (m_cursorMode == CURSOR_MODE::create_rect && m_isDrawing && m_currentRect) {
-        m_currentRect->setRectFromPoints(m_rectStartPos, scenePos);
+        m_currentRect->setRectFromPoints(m_rectStartPos, clampToBounds(scenePos));
+        m_crossMousePos = scenePos;
         viewport()->update();
         return;
+    }
+
+    if (m_cursorMode == CURSOR_MODE::create_rect && !m_isDrawing) {
+        m_crossMousePos = scenePos;
+        viewport()->update();
     }
 
     ///右键拖拽功能
@@ -170,7 +179,7 @@ void MyGraphicsView::mouseMoveEvent(QMouseEvent *e)
     }
     m_lastMousePos = scenePos;
     if (m_isDrawing && m_currentStroke) {
-    m_currentStroke->addPoint(scenePos,false);
+    m_currentStroke->addPoint(clampToBounds(scenePos),false);
     }
     if (m_isErasing && (e->buttons() & Qt::LeftButton)) {
         doErase(scenePos);
@@ -204,6 +213,7 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
         if (m_cursorMode == CURSOR_MODE::create_rect && m_isDrawing) {
             m_currentRect = nullptr;
             m_isDrawing = false;
+            viewport()->update();
             emit sg_drawingFinished();
             e->accept();
             return;
@@ -240,6 +250,17 @@ void MyGraphicsView::drawForeground(QPainter *painter, const QRectF &rect)
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(m_roiPreviewRect);
     }
+    if (m_cursorMode == CURSOR_MODE::create_rect) {
+        QPen crossPen(QColor(0, 255, 0), 1, Qt::DashLine);
+        painter->setPen(crossPen);
+        painter->setOpacity(0.6);
+        QRectF sceneRect = mapToScene(viewport()->rect()).boundingRect();
+        painter->drawLine(QPointF(m_crossMousePos.x(), sceneRect.top()),
+                          QPointF(m_crossMousePos.x(), sceneRect.bottom()));
+        painter->drawLine(QPointF(sceneRect.left(), m_crossMousePos.y()),
+                          QPointF(sceneRect.right(), m_crossMousePos.y()));
+        painter->setOpacity(1.0);
+    }
 }
 
 void MyGraphicsView::doErase(const QPointF &scenePos)
@@ -259,6 +280,16 @@ void MyGraphicsView::doErase(const QPointF &scenePos)
             }
         }
     }
+}
+
+QPointF MyGraphicsView::clampToBounds(const QPointF &pos) const
+{
+    if (m_drawBounds.isNull())
+        return pos;
+    return QPointF(
+        qBound(m_drawBounds.left(), pos.x(), m_drawBounds.right()),
+        qBound(m_drawBounds.top(), pos.y(), m_drawBounds.bottom())
+    );
 }
 
 void MyGraphicsView::updateCursor()

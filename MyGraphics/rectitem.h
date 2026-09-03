@@ -25,6 +25,7 @@ public:
     int penWidth() const { return m_penWidth; }
 
     void setRectFromPoints(const QPointF &start, const QPointF &end);
+    void setBoundary(const QRectF &boundary) { m_boundary = boundary; }
     QVector<QPointF> getCornerPoints() const;
 
     QRectF boundingRect() const override;
@@ -42,6 +43,7 @@ protected:
 private:
     Handle handleAt(const QPointF &pos) const;
     void updateCursor(Handle h);
+    QRectF clampRectToBoundary(const QRectF &r) const;
 
     int m_classId;
     QColor m_color;
@@ -49,6 +51,7 @@ private:
     Handle m_activeHandle = None;
     QPointF m_pressPos;
     QRectF m_pressRect;
+    QRectF m_boundary;
     qreal m_handleSize = 8.0;
 };
 

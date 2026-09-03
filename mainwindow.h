@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QComboBox>
 #include <QPushButton>
+#include <QTimer>
 #include "MyGraphics/mygraphicsview.h"
 #include "MyGraphics/painteditem.h"
 #include "MyGraphics/visibilitymanager.h"
@@ -147,6 +148,8 @@ private:
     void enableDrawActions(bool enabled);
     void setupShortcuts();
     void navigateList(int delta);
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
 
     void showSegInferLabel();
     void showLabelingPatterns();
@@ -202,5 +205,9 @@ private:
     QStringList m_categories;
     QStringList m_allImageFiles;
     QListWidget *m_activeList = nullptr;
+
+    // W/S 长按调笔触
+    QTimer *m_penSizeTimer = nullptr;
+    int m_penSizeDelta = 0;
 };
 #endif // MAINWINDOW_H

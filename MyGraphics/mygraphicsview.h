@@ -27,8 +27,10 @@ public:
     int getFactor();
     void setFactor(int _factor);
     void resetCursorMode(){m_cursorMode=CURSOR_MODE::origin;};
-    void switchCursorMode(CURSOR_MODE mode){m_cursorMode=mode; updateCursor();};
+    void switchCursorMode(CURSOR_MODE mode){m_cursorMode=mode; updateCursor(); viewport()->update();};
     void setDrawEffectEnabled(bool enabled) { m_drawEffectEnabled = enabled; }
+    void setDrawBounds(const QRectF &bounds) { m_drawBounds = bounds; }
+    QRectF drawBounds() const { return m_drawBounds; }
     QList<QPair<int, QVector<QVector<QPointF>>>> getAllStrokesOutlineData() const;
     void clearStrokes();
     void removeStroke(StrokeItem *stroke);
@@ -59,6 +61,7 @@ protected:
 
 private:
     void doErase(const QPointF &scenePos);
+    QPointF clampToBounds(const QPointF &pos) const;
     ///放大视图
     int factor_;
 
@@ -88,6 +91,12 @@ private:
     QPointF m_roiStartPos;
     QRectF m_roiPreviewRect;
     bool m_roiDrawing = false;
+
+    // 绘制边界（ROI 或图片边界）
+    QRectF m_drawBounds;
+
+    // 十字线
+    QPointF m_crossMousePos;
 
 };
 #endif // MYGRAPHICSVIEW_H

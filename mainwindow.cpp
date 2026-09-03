@@ -78,6 +78,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_penWidthSpinBox, &QSpinBox::valueChanged, this, [this](int penWid)
             { ui->graphicsView->setPenWidth(penWid); });
 
+    m_penSizeTimer = new QTimer(this);
+    m_penSizeTimer->setInterval(30);
+    connect(m_penSizeTimer, &QTimer::timeout, this, [this]{
+        int val = m_penWidthSpinBox->value() + m_penSizeDelta;
+        m_penWidthSpinBox->setValue(qBound(1, val, 100));
+    });
+
     // 添加标签下拉栏
     m_labelsComboBox = new QComboBox(this);
     m_labelsComboBox->setItemDelegate(new ColorDelegate(m_labelsComboBox));
@@ -2285,8 +2292,6 @@ void MainWindow::setupShortcuts()
     bind(Qt::Key_C, [this]{ ui->actioncursor->trigger(); });
     bind(Qt::Key_E, [this]{ ui->actionpen_brush->trigger(); });
     bind(Qt::Key_R, [this]{ ui->actionCreateRoi->trigger(); });
-    bind(Qt::Key_W, [this]{ m_penWidthSpinBox->setValue(m_penWidthSpinBox->value() + 1); });
-    bind(Qt::Key_S, [this]{ m_penWidthSpinBox->setValue(qMax(1, m_penWidthSpinBox->value() - 1)); });
     bind(Qt::Key_X, [this]{
         if (m_labelsComboBox->count() == 0) return;
         int next = (m_labelsComboBox->currentIndex() + 1) % m_labelsComboBox->count();
@@ -2306,6 +2311,34 @@ void MainWindow::navigateList(int delta)
     saveLabelingData();
     list->setCurrentRow(newRow);
     emit list->itemDoubleClicked(list->item(newRow));
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    if (!event->isAutoRepeat()) {
+        if (event->key() == Qt::Key_W) {
+            m_penSizeDelta = 1;
+            m_penSizeTimer->start();
+            return;
+        }
+        if (event->key() == Qt::Key_S) {
+            m_penSizeDelta = -1;
+            m_penSizeTimer->start();
+            return;
+        }
+    }
+    QMainWindow::keyPressEvent(event);
+}
+
+void MainWindow::keyReleaseEvent(QKeyEvent *event)
+{
+    if (!event->isAutoRepeat()) {
+        if (event->key() == Qt::Key_W || event->key() == Qt::Key_S) {
+            m_penSizeTimer->stop();
+            return;
+        }
+    }
+    QMainWindow::keyReleaseEvent(event);
 }
 
 void MainWindow::on_actionoh_test_triggered()
@@ -2480,12 +2513,19 @@ void MainWindow::displayRoi()
         m_roiOverlayItem = nullptr;
     }
 
-    if (m_roiRect.isNull() || m_currentImage.isNull())
+    if (m_currentImage.isNull())
         return;
 
-    // 裁剪ROI到图像范围内
     QRectF imageRect(0, 0, m_currentImage.width(), m_currentImage.height());
+
+    if (m_roiRect.isNull()) {
+        ui->graphicsView->setDrawBounds(imageRect);
+        return;
+    }
+
+    // 裁剪ROI到图像范围内
     QRectF clampedRoi = m_roiRect.intersected(imageRect);
+    ui->graphicsView->setDrawBounds(clampedRoi);
 
     // 创建overlay
     m_roiOverlayItem = new RoiOverlayItem();
