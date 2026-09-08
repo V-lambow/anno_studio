@@ -52,6 +52,9 @@ public:
 #include <QPushButton>
 #include <QLineEdit>
 #include <QLibrary>
+#include <QDialog>
+#include <QTableWidget>
+#include <QHeaderView>
 #include "MyGraphics/inferpattern.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -2352,6 +2355,61 @@ void MainWindow::on_actionoh_test_triggered()
     QString hdictPath =m_curLabelInfo.imgName.left(m_curLabelInfo.imgName.lastIndexOf("."))+"_SEGinfer.hdict";
     args<<this->m_curLabelInfo.imgName<<hdictPath;
     QProcess::startDetached(program, args);
+}
+
+void MainWindow::on_actionShortcuts_triggered()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle("快捷键说明");
+    dlg.setMinimumSize(420, 340);
+
+    QVBoxLayout *layout = new QVBoxLayout(&dlg);
+
+    QTableWidget *table = new QTableWidget(&dlg);
+    table->setColumnCount(2);
+    table->setHorizontalHeaderLabels({"快捷键", "功能"});
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    table->verticalHeader()->setVisible(false);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setAlternatingRowColors(true);
+
+    struct ShortcutInfo {
+        const char *key;
+        const char *desc;
+    };
+
+    ShortcutInfo infos[] = {
+        {"A",            "上一张图片"},
+        {"D",            "下一张图片"},
+        {"Q",            "矩形标注模式"},
+        {"C",            "光标模式"},
+        {"E",            "画笔模式"},
+        {"R",            "创建 ROI 区域"},
+        {"X",            "循环切换标签"},
+        {"W (长按)",     "增大画笔粗细"},
+        {"S (长按)",     "减小画笔粗细"},
+    };
+
+    table->setRowCount(sizeof(infos) / sizeof(infos[0]));
+    for (int i = 0; i < table->rowCount(); ++i) {
+        QTableWidgetItem *keyItem = new QTableWidgetItem(infos[i].key);
+        keyItem->setTextAlignment(Qt::AlignCenter);
+        QFont font = keyItem->font();
+        font.setBold(true);
+        keyItem->setFont(font);
+        table->setItem(i, 0, keyItem);
+        table->setItem(i, 1, new QTableWidgetItem(infos[i].desc));
+    }
+
+    layout->addWidget(table);
+
+    QPushButton *closeBtn = new QPushButton("关闭", &dlg);
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    layout->addWidget(closeBtn, 0, Qt::AlignRight);
+
+    dlg.exec();
 }
 
 std::variant<std::monostate,QString> MainWindow::saigeMoelInit(SaigeInferPara param){
