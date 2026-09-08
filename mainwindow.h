@@ -39,6 +39,7 @@
 #include <QFuture>
 #include <variant>
 #include "MyGraphics/roioverlayitem.h"
+#include "MyGraphics/canvasadjustmentwidget.h"
 
 
 
@@ -139,6 +140,10 @@ private slots:
     void mergeOverlappingStrokes();
     void on_actionCreateRoi_triggered();
 
+    void sl_onBrightnessContrastChanged(int brightness, int contrast);
+    void sl_onAnnotationOpacityChanged(int opacity);
+    void sl_showAdjustPopup();
+
 signals:
     void sg_imageInfo_label(QString,int,int);
     void sg_penWidth_changed(int);
@@ -210,5 +215,10 @@ private:
     // W/S 长按调笔触
     QTimer *m_penSizeTimer = nullptr;
     int m_penSizeDelta = 0;
+
+    // 亮度对比度调节
+    CanvasAdjustmentWidget *m_canvasAdjustment = nullptr;
+    QPixmap m_originalPixmap;
+    QGraphicsPixmapItem *m_pixmapItem = nullptr;
 };
 #endif // MAINWINDOW_H

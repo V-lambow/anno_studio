@@ -248,6 +248,19 @@ MainWindow::MainWindow(QWidget *parent)
         qDebug() << "SaigeVision.dll not found - Saige features disabled";
     }
     setupShortcuts();
+
+    m_canvasAdjustment = new CanvasAdjustmentWidget(this);
+    connect(m_canvasAdjustment, &CanvasAdjustmentWidget::sg_brightnessContrastChanged,
+            this, &MainWindow::sl_onBrightnessContrastChanged);
+    connect(m_canvasAdjustment, &CanvasAdjustmentWidget::sg_annotationOpacityChanged,
+            this, &MainWindow::sl_onAnnotationOpacityChanged);
+
+    QToolButton *adjustBtn = new QToolButton();
+    adjustBtn->setText(QString::fromUtf8("\u2699"));
+    adjustBtn->setToolTip(QString::fromUtf8("显示调节"));
+    adjustBtn->setFixedSize(24, 20);
+    connect(adjustBtn, &QToolButton::clicked, this, &MainWindow::sl_showAdjustPopup);
+    ui->statusbar->addPermanentWidget(adjustBtn);
 }
 
 void MainWindow::enableDrawActions(bool enabled)
@@ -1075,6 +1088,8 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
     m_roiOverlayItem = nullptr;
     // 添加图像到场景
     QGraphicsPixmapItem *pixmapItem = m_scene->addPixmap(pixmap);
+    m_pixmapItem = pixmapItem;
+    m_originalPixmap = pixmap;
     m_currentImage = pixmap.toImage();
     emit sg_imageInfo_label(imagePath, pixmap.height(), pixmap.width());
 
@@ -1253,6 +1268,8 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
 
     // 添加图像到场景
     QGraphicsPixmapItem *pixmapItem = scene->addPixmap(pixmap);
+    m_pixmapItem = pixmapItem;
+    m_originalPixmap = pixmap;
     m_currentImage = pixmap.toImage();
     emit sg_imageInfo_label(imagePath, pixmap.height(), pixmap.width());
 
@@ -2300,6 +2317,64 @@ void MainWindow::setupShortcuts()
         int next = (m_labelsComboBox->currentIndex() + 1) % m_labelsComboBox->count();
         m_labelsComboBox->setCurrentIndex(next);
     });
+}
+
+void MainWindow::sl_showAdjustPopup()
+{
+    if (!m_canvasAdjustment) return;
+    m_canvasAdjustment->updatePosition();
+    m_canvasAdjustment->show();
+    m_canvasAdjustment->raise();
+    m_canvasAdjustment->activateWindow();
+}
+
+void MainWindow::sl_onBrightnessContrastChanged(int brightness, int contrast)
+{
+    if (m_originalPixmap.isNull()) return;
+
+    QImage img = m_originalPixmap.toImage();
+
+    double bFactor = brightness / 100.0;
+    double cFactor = contrast / 100.0;
+
+    if (bFactor != 1.0 || cFactor != 1.0) {
+        QImage result = img.copy();
+        int w = result.width();
+        int h = result.height();
+
+        double cIntercept = 127.5 * (1.0 - cFactor);
+
+        for (int y = 0; y < h; ++y) {
+            uchar *line = result.scanLine(y);
+            int depth = img.depth() / 8;
+            for (int x = 0; x < w; ++x) {
+                uchar *pixel = line + x * depth;
+                for (int ch = 0; ch < qMin(depth, 3); ++ch) {
+                    double v = pixel[ch];
+                    v = v * bFactor;
+                    v = v * cFactor + cIntercept;
+                    pixel[ch] = qBound(0, static_cast<int>(v), 255);
+                }
+            }
+        }
+        if (m_pixmapItem) {
+            m_pixmapItem->setPixmap(QPixmap::fromImage(result));
+        }
+    } else {
+        if (m_pixmapItem) {
+            m_pixmapItem->setPixmap(m_originalPixmap);
+        }
+    }
+}
+
+void MainWindow::sl_onAnnotationOpacityChanged(int opacity)
+{
+    qreal opacityF = opacity / 100.0;
+    for (QGraphicsItem *item : m_scene->items()) {
+        if (dynamic_cast<StrokeItem*>(item) || dynamic_cast<RectItem*>(item)) {
+            item->setOpacity(opacityF);
+        }
+    }
 }
 
 void MainWindow::navigateList(int delta)
