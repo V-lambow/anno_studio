@@ -216,6 +216,8 @@ border-color: rgb(255, 124, 64);</string>
     <addaction name="separator"/>
     <addaction name="actionadd_image"/>
     <addaction name="actionadd_imagefold"/>
+    <addaction name="separator"/>
+    <addaction name="actionLabelStatistics"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -515,12 +517,17 @@ border-color: rgb(255, 124, 64);</string>
      <string>导出COCO分割 (多边形)</string>
     </property>
    </action>
-   <action name="actionShortcuts">
-    <property name="text">
-     <string>快捷键说明</string>
-    </property>
-   </action>
-  </widget>
+    <action name="actionShortcuts">
+     <property name="text">
+      <string>快捷键说明</string>
+     </property>
+    </action>
+    <action name="actionLabelStatistics">
+     <property name="text">
+      <string>标注统计</string>
+     </property>
+    </action>
+   </widget>
  <customwidgets>
   <customwidget>
    <class>MyGraphicsView</class>

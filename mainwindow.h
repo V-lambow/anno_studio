@@ -40,6 +40,7 @@
 #include <variant>
 #include "MyGraphics/roioverlayitem.h"
 #include "MyGraphics/canvasadjustmentwidget.h"
+#include "dlg/dlg_labelstatistics.h"
 
 
 
@@ -136,6 +137,7 @@ private slots:
 
     void on_actionoh_test_triggered();
     void on_actionShortcuts_triggered();
+    void on_actionLabelStatistics_triggered();
     void saveLabelingData();
     void mergeOverlappingStrokes();
     void on_actionCreateRoi_triggered();

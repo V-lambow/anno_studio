@@ -2487,6 +2487,68 @@ void MainWindow::on_actionShortcuts_triggered()
     dlg.exec();
 }
 
+void MainWindow::on_actionLabelStatistics_triggered()
+{
+    QMap<int, QString> classNames;
+    for (int i = 0; i < m_labelsComboBox->count(); ++i) {
+        classNames[i] = m_labelsComboBox->itemText(i);
+    }
+
+    auto collectFromDir = [&](const QString &subDir) -> DataSet {
+        DataSet ds;
+        ds.classNames = classNames;
+        if (m_curProjectPath.isEmpty()) return ds;
+
+        QDir dir(m_curProjectPath + "/" + subDir);
+        if (!dir.exists()) return ds;
+
+        QStringList filters;
+        filters << "*_labeling.json";
+        QStringList files = dir.entryList(filters, QDir::Files);
+
+        for (const QString &file : files) {
+            QString filePath = dir.filePath(file);
+            QFile f(filePath);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+
+            QByteArray data = f.readAll();
+            f.close();
+
+            Json::Value root;
+            Json::Reader reader;
+            if (!reader.parse(data.toStdString(), root)) continue;
+            if (!root.isArray()) continue;
+
+            for (const auto &obj : root) {
+                std::string className = obj["classname"].asString();
+                int classId = -1;
+                for (int i = 0; i < m_labelsComboBox->count(); ++i) {
+                    if (m_labelsComboBox->itemText(i).toStdString() == className) {
+                        classId = i;
+                        break;
+                    }
+                }
+                if (classId < 0) continue;
+
+                qreal area = 0;
+                if (obj.isMember("area")) {
+                    area = obj["area"].asUInt();
+                } else if (obj.isMember("bbox") && obj["bbox"].isArray() && obj["bbox"].size() == 4) {
+                    area = obj["bbox"][2].asDouble() * obj["bbox"][3].asDouble();
+                }
+                ds.labelData.append({classId, area});
+            }
+        }
+        return ds;
+    };
+
+    DataSet trainData = collectFromDir("train/image");
+    DataSet nonTrainData = collectFromDir("non_train/image");
+
+    LabelStatisticsDialog dlg(trainData, nonTrainData, this);
+    dlg.exec();
+}
+
 std::variant<std::monostate,QString> MainWindow::saigeMoelInit(SaigeInferPara param){
 
     ui->infer_ckBox->setChecked(false);
