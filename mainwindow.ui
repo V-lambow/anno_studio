@@ -241,14 +241,8 @@ border-color: rgb(255, 124, 64);</string>
      <addaction name="actionExportVocSeg"/>
      <addaction name="actionExportCocoDet"/>
      <addaction name="actionExportCocoSeg"/>
-   </widget>
-   <widget class="QMenu" name="menu_4">
-    <property name="title">
-     <string>后处理</string>
-    </property>
-    <addaction name="actionoh_test"/>
-   </widget>
-   <widget class="QMenu" name="menu_5">
+    </widget>
+    <widget class="QMenu" name="menu_5">
     <property name="title">
      <string>帮助</string>
     </property>
@@ -256,9 +250,8 @@ border-color: rgb(255, 124, 64);</string>
    </widget>
    <addaction name="menu"/>
    <addaction name="menu_2"/>
-   <addaction name="menu_3"/>
-   <addaction name="menu_4"/>
-   <addaction name="menu_5"/>
+    <addaction name="menu_3"/>
+    <addaction name="menu_5"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QToolBar" name="quickbuttum">
@@ -473,12 +466,7 @@ border-color: rgb(255, 124, 64);</string>
     <string>推理结果导出为hdict</string>
    </property>
   </action>
-  <action name="actionoh_test">
-   <property name="text">
-    <string>oh_test</string>
-   </property>
-  </action>
-   <action name="actionultra_infer">
+    <action name="actionultra_infer">
     <property name="icon">
      <iconset resource="resource/resourse.qrc">
       <normaloff>:/img/ultralytics.ico</normaloff>:/img/ultralytics.ico</iconset>

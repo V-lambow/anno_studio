@@ -2419,19 +2419,6 @@ void MainWindow::keyReleaseEvent(QKeyEvent *event)
     QMainWindow::keyReleaseEvent(event);
 }
 
-void MainWindow::on_actionoh_test_triggered()
-{
-    QString program ="D:/oh/BatteryDetec - 赛视 - 02/BatteryDetec/bin/Debug/BatteryDetec.exe";
-    QStringList args;
-
-
-    // qDebug()<<this->m_curLabelInfo.imgName;
-    //hdictpath是和img同名的hdict文件
-    QString hdictPath =m_curLabelInfo.imgName.left(m_curLabelInfo.imgName.lastIndexOf("."))+"_SEGinfer.hdict";
-    args<<this->m_curLabelInfo.imgName<<hdictPath;
-    QProcess::startDetached(program, args);
-}
-
 void MainWindow::on_actionShortcuts_triggered()
 {
     QDialog dlg(this);
@@ -2490,17 +2477,21 @@ void MainWindow::on_actionShortcuts_triggered()
 void MainWindow::on_actionLabelStatistics_triggered()
 {
     QMap<int, QString> classNames;
+    QMap<int, QColor> classColors;
     for (int i = 0; i < m_labelsComboBox->count(); ++i) {
         classNames[i] = m_labelsComboBox->itemText(i);
+        classColors[i] = m_labelsComboBox->itemData(i).value<QColor>();
     }
 
-    auto collectFromDir = [&](const QString &subDir) -> DataSet {
+    auto collectFromDir = [&](const QString &subDir) -> QPair<DataSet, QSize> {
         DataSet ds;
         ds.classNames = classNames;
-        if (m_curProjectPath.isEmpty()) return ds;
+        ds.classColors = classColors;
+        QSize imgSize;
+        if (m_curProjectPath.isEmpty()) return {ds, imgSize};
 
         QDir dir(m_curProjectPath + "/" + subDir);
-        if (!dir.exists()) return ds;
+        if (!dir.exists()) return {ds, imgSize};
 
         QStringList filters;
         filters << "*_labeling.json";
@@ -2519,6 +2510,15 @@ void MainWindow::on_actionLabelStatistics_triggered()
             if (!reader.parse(data.toStdString(), root)) continue;
             if (!root.isArray()) continue;
 
+            QString baseName = file;
+            baseName.chop(strlen("_labeling.json"));
+            QString imgPath = dir.filePath(baseName);
+            if (imgSize.isNull() && QFile::exists(imgPath)) {
+                QImage img(imgPath);
+                if (!img.isNull())
+                    imgSize = img.size();
+            }
+
             for (const auto &obj : root) {
                 std::string className = obj["classname"].asString();
                 int classId = -1;
@@ -2536,16 +2536,37 @@ void MainWindow::on_actionLabelStatistics_triggered()
                 } else if (obj.isMember("bbox") && obj["bbox"].isArray() && obj["bbox"].size() == 4) {
                     area = obj["bbox"][2].asDouble() * obj["bbox"][3].asDouble();
                 }
-                ds.labelData.append({classId, area});
+
+                qreal cRow = 0, cCol = 0;
+                if (obj.isMember("points") && obj["points"].isArray() && obj["points"].size() >= 3) {
+                    qreal sumRow = 0, sumCol = 0;
+                    int ptCount = 0;
+                    for (const auto &pt : obj["points"]) {
+                        if (pt.isArray() && pt.size() >= 2) {
+                            sumCol += pt[0].asDouble();
+                            sumRow += pt[1].asDouble();
+                            ptCount++;
+                        }
+                    }
+                    if (ptCount > 0) {
+                        cRow = sumRow / ptCount;
+                        cCol = sumCol / ptCount;
+                    }
+                }
+
+                ds.labelData.append({classId, area, cRow, cCol});
             }
         }
-        return ds;
+        return {ds, imgSize};
     };
 
-    DataSet trainData = collectFromDir("train/image");
-    DataSet nonTrainData = collectFromDir("non_train/image");
+    auto [trainDs, trainImgSize] = collectFromDir("train/image");
+    auto [nonTrainDs, nonTrainImgSize] = collectFromDir("non_train/image");
 
-    LabelStatisticsDialog dlg(trainData, nonTrainData, this);
+    int imgW = qMax(trainImgSize.width(), nonTrainImgSize.width());
+    int imgH = qMax(trainImgSize.height(), nonTrainImgSize.height());
+
+    LabelStatisticsDialog dlg(trainDs, nonTrainDs, imgW, imgH, this);
     dlg.exec();
 }
 

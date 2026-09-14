@@ -135,7 +135,6 @@ private slots:
 
     void on_actionadd_imagefold_triggered();
 
-    void on_actionoh_test_triggered();
     void on_actionShortcuts_triggered();
     void on_actionLabelStatistics_triggered();
     void saveLabelingData();

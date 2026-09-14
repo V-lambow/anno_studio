@@ -7,33 +7,23 @@
 #include <algorithm>
 #include <numeric>
 
-static QList<QColor> kPalette = {
-    QColor(65, 105, 225),
-    QColor(50, 205, 50),
-    QColor(255, 140, 0),
-    QColor(220, 20, 60),
-    QColor(148, 103, 189),
-    QColor(0, 191, 255),
-    QColor(255, 215, 0),
-    QColor(32, 178, 170),
-    QColor(255, 99, 71),
-    QColor(154, 205, 50),
-};
-
 static QList<LabelStats> computeStats(const DataSet &ds)
 {
     QMap<int, LabelStats> map;
-    for (auto &[clsId, area] : ds.labelData) {
-        map[clsId].count++;
-        if (area > 0)
-            map[clsId].areas.append(area);
+    for (const auto &item : ds.labelData) {
+        map[item.classId].count++;
+        if (item.area > 0)
+            map[item.classId].areas.append(item.area);
+        map[item.classId].centers.append(QPointF(item.centerRow, item.centerCol));
     }
     QList<LabelStats> result;
     for (auto it = map.begin(); it != map.end(); ++it) {
         LabelStats s;
         s.name = ds.classNames.value(it.key(), QString::number(it.key()));
+        s.color = ds.classColors.value(it.key(), Qt::gray);
         s.count = it->count;
         s.areas = it->areas;
+        s.centers = it->centers;
         result.append(s);
     }
     std::sort(result.begin(), result.end(),
@@ -90,8 +80,9 @@ void BarChartWidget::paintEvent(QPaintEvent *)
     int maxCount = m_stats[0].count;
     if (maxCount == 0) maxCount = 1;
 
-    int gap = 6;
-    int barWidth = qMax(8, (barAreaRight - barAreaLeft - gap * (n + 1)) / n);
+    int totalW = barAreaRight - barAreaLeft;
+    int gap = qMax(4, totalW / (3 * n + 1));
+    int barWidth = gap * 2;
 
     for (int i = 0; i < n; ++i) {
         const LabelStats &s = m_stats[i];
@@ -99,7 +90,7 @@ void BarChartWidget::paintEvent(QPaintEvent *)
         int h = static_cast<int>(barAreaHeight * s.count / static_cast<qreal>(maxCount));
         int y = barAreaBottom - h;
 
-        QColor color = kPalette[i % kPalette.size()];
+        QColor color = s.color;
         QPainterPath barPath;
         barPath.addRoundedRect(x, y, barWidth, h, 3, 3);
         p.setPen(Qt::NoPen);
@@ -210,8 +201,9 @@ void BoxChartWidget::paintEvent(QPaintEvent *)
     }
 
     int n = valid.size();
-    int gap = 8;
-    int boxW = qMax(12, (chartRight - chartLeft - gap * (n + 1)) / n);
+    int totalW = chartRight - chartLeft;
+    int gap = qMax(6, totalW / (3 * n + 1));
+    int boxW = gap * 2;
 
     for (int i = 0; i < n; ++i) {
         const LabelStats &s = valid[i];
@@ -229,7 +221,7 @@ void BoxChartWidget::paintEvent(QPaintEvent *)
         int x = chartLeft + gap + i * (boxW + gap);
         int cx = x + boxW / 2;
 
-        QColor color = kPalette[i % kPalette.size()];
+        QColor color = s.color;
         QColor fillColor = color;
         fillColor.setAlpha(60);
 
@@ -257,25 +249,151 @@ void BoxChartWidget::paintEvent(QPaintEvent *)
     }
 }
 
+ScatterPlotWidget::ScatterPlotWidget(QWidget *parent) : QWidget(parent)
+{
+    setMinimumHeight(220);
+}
+
+void ScatterPlotWidget::setData(const QList<LabelStats> &stats, int imgW, int imgH)
+{
+    m_stats = stats;
+    m_imgW = imgW;
+    m_imgH = imgH;
+    update();
+}
+
+void ScatterPlotWidget::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+
+    QRect rc = rect().adjusted(10, 10, -10, -10);
+
+    QList<LabelStats> valid;
+    for (const auto &s : m_stats) {
+        if (!s.centers.isEmpty())
+            valid.append(s);
+    }
+
+    if (valid.isEmpty()) {
+        p.setPen(Qt::gray);
+        QFont f = p.font();
+        f.setPointSize(11);
+        p.setFont(f);
+        p.drawText(rc, Qt::AlignCenter, QString::fromUtf8("暂无位置数据"));
+        return;
+    }
+
+    QFont titleFont = p.font();
+    titleFont.setPointSize(12);
+    titleFont.setBold(true);
+    p.setFont(titleFont);
+    p.setPen(Qt::black);
+    p.drawText(rc.left(), rc.top() + 16, QString::fromUtf8("位置分布 (row x col)"));
+
+    QFont labelFont = p.font();
+    labelFont.setPointSize(9);
+    labelFont.setBold(false);
+    p.setFont(labelFont);
+
+    int chartTop = rc.top() + 30;
+    int chartBottom = rc.bottom() - 30;
+    int chartLeft = rc.left() + 55;
+    int chartRight = rc.right() - 10;
+    int chartWidth = chartRight - chartLeft;
+    int chartHeight = chartBottom - chartTop;
+
+    qreal maxRow = m_imgH > 0 ? m_imgH : 1;
+    qreal maxCol = m_imgW > 0 ? m_imgW : 1;
+
+    for (const auto &s : valid) {
+        for (const auto &c : s.centers) {
+            if (c.y() > maxRow) maxRow = c.y();
+            if (c.x() > maxCol) maxCol = c.x();
+        }
+    }
+    maxRow *= 1.05;
+    maxCol *= 1.05;
+    if (maxRow <= 0) maxRow = 1;
+    if (maxCol <= 0) maxCol = 1;
+
+    auto toX = [&](qreal col) -> int {
+        return chartLeft + static_cast<int>(chartWidth * col / maxCol);
+    };
+    auto toY = [&](qreal row) -> int {
+        return chartTop + static_cast<int>(chartHeight * row / maxRow);
+    };
+
+    p.setPen(QColor(200, 200, 200));
+    for (int i = 0; i <= 4; ++i) {
+        int y = chartTop + chartHeight * i / 4;
+        p.drawLine(chartLeft, y, chartRight, y);
+        qreal val = maxRow * i / 4;
+        p.setPen(QColor(120, 120, 120));
+        p.drawText(chartLeft - 50, y - 7, 45, 14, Qt::AlignRight | Qt::AlignVCenter,
+                   QString::number(static_cast<int>(val)));
+        p.setPen(QColor(200, 200, 200));
+    }
+    for (int i = 0; i <= 4; ++i) {
+        int x = chartLeft + chartWidth * i / 4;
+        p.drawLine(x, chartTop, x, chartBottom);
+        qreal val = maxCol * i / 4;
+        p.setPen(QColor(120, 120, 120));
+        QRect labelRc(x - 20, chartBottom + 4, 40, 14);
+        p.drawText(labelRc, Qt::AlignHCenter | Qt::AlignTop, QString::number(static_cast<int>(val)));
+        p.setPen(QColor(200, 200, 200));
+    }
+
+    p.setPen(Qt::NoPen);
+    for (int i = 0; i < valid.size(); ++i) {
+        const LabelStats &s = valid[i];
+        QColor color = s.color;
+        QColor fillColor = color;
+        fillColor.setAlpha(160);
+        p.setBrush(fillColor);
+        for (const auto &c : s.centers) {
+            int cx = toX(c.x());
+            int cy = toY(c.y());
+            p.drawEllipse(QPoint(cx, cy), 4, 4);
+        }
+    }
+
+    QFont legFont = p.font();
+    legFont.setPointSize(8);
+    p.setFont(legFont);
+    int legX = chartRight - 80;
+    int legY = chartTop + 4;
+    for (int i = 0; i < valid.size(); ++i) {
+        QColor color = valid[i].color;
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawEllipse(QPoint(legX, legY + 6), 4, 4);
+        p.setPen(Qt::black);
+        p.drawText(legX + 8, legY, 70, 14, Qt::AlignLeft | Qt::AlignVCenter, valid[i].name);
+        legY += 16;
+    }
+}
+
 LabelStatisticsDialog::LabelStatisticsDialog(const DataSet &trainData,
                                              const DataSet &nonTrainData,
+                                             int imgW, int imgH,
                                              QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(QString::fromUtf8("标注统计"));
-    resize(780, 520);
+    resize(780, 700);
 
     m_tabWidget = new QTabWidget(this);
 
-    m_tabWidget->addTab(createTab(trainData), QString::fromUtf8("训练集"));
-    m_tabWidget->addTab(createTab(nonTrainData), QString::fromUtf8("非训练集"));
+    m_tabWidget->addTab(createTab(trainData, imgW, imgH), QString::fromUtf8("训练集"));
+    m_tabWidget->addTab(createTab(nonTrainData, imgW, imgH), QString::fromUtf8("非训练集"));
 
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(8, 8, 8, 8);
     mainLayout->addWidget(m_tabWidget);
 }
 
-QWidget *LabelStatisticsDialog::createTab(const DataSet &data)
+QWidget *LabelStatisticsDialog::createTab(const DataSet &data, int imgW, int imgH)
 {
     auto *tab = new QWidget();
     auto *layout = new QVBoxLayout(tab);
@@ -292,8 +410,12 @@ QWidget *LabelStatisticsDialog::createTab(const DataSet &data)
     auto *boxChart = new BoxChartWidget(tab);
     boxChart->setData(stats);
 
+    auto *scatterChart = new ScatterPlotWidget(tab);
+    scatterChart->setData(stats, imgW, imgH);
+
     layout->addWidget(barChart, 1);
     layout->addWidget(boxChart, 1);
+    layout->addWidget(scatterChart, 1);
 
     return tab;
 }
