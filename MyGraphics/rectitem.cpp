@@ -14,6 +14,16 @@ RectItem::RectItem(QColor color, int penSize, int classId, QGraphicsItem *parent
     setAcceptHoverEvents(true);
 }
 
+RectItem *RectItem::copy() const
+{
+    auto *item = new RectItem(m_color, m_penWidth, m_classId);
+    item->setRect(rect());
+    item->setPos(pos());
+    item->setBoundary(m_boundary);
+    item->setRotation(rotation());
+    return item;
+}
+
 void RectItem::setRectFromPoints(const QPointF &start, const QPointF &end)
 {
     QRectF r(start, end);

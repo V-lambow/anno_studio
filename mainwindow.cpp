@@ -235,6 +235,8 @@ MainWindow::MainWindow(QWidget *parent)
             this, [this](StrokeItem *item) {
         m_labelingItems.removeOne(item);
     });
+    connect(ui->graphicsView, &MyGraphicsView::sg_undoRestored,
+            this, &MainWindow::saveLabelingData);
 
     {
         QLibrary saigeLib("SaigeVision.dll");
@@ -1082,6 +1084,7 @@ void MainWindow::on_non_train_list_itemDoubleClicked(QListWidgetItem *item)
 
     ui->graphicsView->clearStrokes();
     ui->graphicsView->clearRects();
+    ui->graphicsView->clearUndo();
     m_scene->clear();
     m_labelingItems.clear();
     m_displayedImageInfo.clear();
@@ -1261,6 +1264,7 @@ void MainWindow::on_train_list_itemDoubleClicked(QListWidgetItem *item)
         // 清除现有内容
         ui->graphicsView->clearStrokes();
         ui->graphicsView->clearRects();
+        ui->graphicsView->clearUndo();
         scene->clear();
         m_labelingItems.clear();
         m_roiOverlayItem = nullptr;
@@ -1699,13 +1703,16 @@ void MainWindow::showLabelingPatterns()
             item->setRectFromPoints(pts[0], pts[2]);
             m_scene->addItem(item);
             m_labelingItems.append(item);
+            ui->graphicsView->addRect(item);
         } else {
             StrokeItem *item = new StrokeItem(color, 3, classId);
             item->setPolygonFromPoints(pts);
             m_scene->addItem(item);
             m_labelingItems.append(item);
+            ui->graphicsView->addStroke(item);
         }
     }
+    ui->graphicsView->storeUndo();
 }
 
 void MainWindow::on_actioninferPattern_xml_triggered()
@@ -2404,6 +2411,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             m_penSizeTimer->start();
             return;
         }
+        if (event->key() == Qt::Key_Z && ui->graphicsView->canUndo()) {
+            ui->graphicsView->restoreUndo();
+            return;
+        }
     }
     QMainWindow::keyPressEvent(event);
 }
@@ -2452,6 +2463,7 @@ void MainWindow::on_actionShortcuts_triggered()
         {"X",            "循环切换标签"},
         {"W (长按)",     "增大画笔粗细"},
         {"S (长按)",     "减小画笔粗细"},
+        {"Z",            "撤销"},
     };
 
     table->setRowCount(sizeof(infos) / sizeof(infos[0]));

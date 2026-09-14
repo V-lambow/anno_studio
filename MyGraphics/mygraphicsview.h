@@ -6,6 +6,7 @@
 #include "painteditem.h"
 #include "rectitem.h"
 #include "inferpattern.h"
+#include "undomanager.h"
 #include <QKeyEvent>
 #include <QWheelEvent>
 #include <QDebug>
@@ -34,17 +35,25 @@ public:
     QList<QPair<int, QVector<QVector<QPointF>>>> getAllStrokesOutlineData() const;
     void clearStrokes();
     void removeStroke(StrokeItem *stroke);
+    void addStroke(StrokeItem *stroke);
+    void addRect(RectItem *rect);
 
     // 矩形相关方法
     QList<QPair<int, QVector<QPointF>>> getAllRectData() const;
     void clearRects();
     void removeRect(RectItem *rect);
 
+    void storeUndo();
+    bool canUndo() const;
+    void restoreUndo();
+    void clearUndo();
+
 signals:
     void sg_mouseMoved(const QPointF& pt);
     void sg_drawingFinished();
     void sg_itemErasedCompletely(StrokeItem *item);
     void sg_roiDrawn(const QRectF &rect);
+    void sg_undoRestored();
 
     // void itemHovered(MyGraphicsItem *item);
 
@@ -97,6 +106,9 @@ private:
 
     // 十字线
     QPointF m_crossMousePos;
+
+    // 撤销管理
+    UndoManager m_undoManager;
 
 };
 #endif // MYGRAPHICSVIEW_H

@@ -43,6 +43,19 @@ StrokeItem::StrokeItem(QColor color, int penSize, int classId, QGraphicsPathItem
     setPen(p);
 }
 
+StrokeItem *StrokeItem::copy() const
+{
+    QPen p = pen();
+    QColor originalColor = p.color();
+    originalColor.setAlpha(51);
+    auto *item = new StrokeItem(originalColor, static_cast<int>(p.widthF()), m_classId);
+    item->setStrokePath(m_path);
+    item->setPolygonMode(m_isPolygon);
+    item->setPos(pos());
+    item->setRotation(rotation());
+    return item;
+}
+
 void StrokeItem::addPoint(const QPointF &point,bool isPress)
 {
     QPointF localPoint = mapFromScene(point);

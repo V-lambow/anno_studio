@@ -53,6 +53,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MyGraphics/visibilitymanager.h MyGraphics/visibilitymanager.cpp
         MyGraphics/roioverlayitem.h
         MyGraphics/canvasadjustmentwidget.h MyGraphics/canvasadjustmentwidget.cpp
+        MyGraphics/undomanager.h MyGraphics/undomanager.cpp
         utils/include/label_exporter.h utils/src/label_exporter.cpp
 
 

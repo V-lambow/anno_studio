@@ -18,6 +18,7 @@ public:
     enum Handle { None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right, Interior };
 
     RectItem(QColor color, int penSize, int classId, QGraphicsItem *parent = nullptr);
+    RectItem *copy() const;
 
     int type() const override { return Type; }
     int classId() const { return m_classId; }

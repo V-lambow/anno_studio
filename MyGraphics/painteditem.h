@@ -30,6 +30,7 @@ class StrokeItem : public PaintedItem
 {
 public:
     StrokeItem(QColor color, int penSize, int classId, QGraphicsPathItem *parent = nullptr);
+    StrokeItem *copy() const;
 
     // 添加新的点到路径
     void addPoint(const QPointF &point,bool isPress);

@@ -213,6 +213,7 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
         if (m_cursorMode == CURSOR_MODE::create_rect && m_isDrawing) {
             m_currentRect = nullptr;
             m_isDrawing = false;
+            storeUndo();
             viewport()->update();
             emit sg_drawingFinished();
             e->accept();
@@ -221,10 +222,12 @@ void MyGraphicsView::mouseReleaseEvent(QMouseEvent *e)
         if (m_isDrawing) {
             m_currentStroke = nullptr;
             m_isDrawing = false;
+            storeUndo();
             emit sg_drawingFinished();
         }
         if (m_isErasing) {
             m_isErasing = false;
+            storeUndo();
             emit sg_drawingFinished();
         }
         if (m_isDrawing || m_isErasing) {
@@ -273,6 +276,7 @@ void MyGraphicsView::doErase(const QPointF &scenePos)
         auto *stroke = dynamic_cast<StrokeItem*>(item);
         if (stroke) {
             if (!stroke->eraseAt(scenePos, r)) {
+                storeUndo();
                 scene()->removeItem(stroke);
                 removeStroke(stroke);
                 emit sg_itemErasedCompletely(stroke);
@@ -342,6 +346,16 @@ void MyGraphicsView::removeStroke(StrokeItem *stroke)
     m_strokeItems.removeOne(stroke);
 }
 
+void MyGraphicsView::addStroke(StrokeItem *stroke)
+{
+    m_strokeItems.append(stroke);
+}
+
+void MyGraphicsView::addRect(RectItem *rect)
+{
+    m_rectItems.append(rect);
+}
+
 QList<QPair<int, QVector<QPointF>>> MyGraphicsView::getAllRectData() const
 {
     QList<QPair<int, QVector<QPointF>>> result;
@@ -372,24 +386,76 @@ void MyGraphicsView::removeRect(RectItem *rect)
     m_rectItems.removeOne(rect);
 }
 
+void MyGraphicsView::storeUndo()
+{
+    m_undoManager.store(m_strokeItems, m_rectItems);
+}
+
+bool MyGraphicsView::canUndo() const
+{
+    return m_undoManager.canUndo();
+}
+
+void MyGraphicsView::restoreUndo()
+{
+    UndoSnapshot snap = m_undoManager.undo();
+    if (snap.strokes.isEmpty() && snap.rects.isEmpty())
+        return;
+
+    for (auto *s : m_strokeItems) {
+        scene()->removeItem(s);
+        delete s;
+    }
+    m_strokeItems.clear();
+
+    for (auto *r : m_rectItems) {
+        scene()->removeItem(r);
+        delete r;
+    }
+    m_rectItems.clear();
+
+    m_strokeItems = snap.strokes;
+    for (auto *s : m_strokeItems)
+        scene()->addItem(s);
+
+    m_rectItems = snap.rects;
+    for (auto *r : m_rectItems)
+        scene()->addItem(r);
+
+    m_currentStroke = nullptr;
+    m_currentRect = nullptr;
+    m_isDrawing = false;
+    m_isErasing = false;
+
+    emit sg_undoRestored();
+}
+
+void MyGraphicsView::clearUndo()
+{
+    m_undoManager.clear();
+}
+
 void MyGraphicsView::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
         const auto selected = scene()->selectedItems();
-        for (QGraphicsItem *item : selected)
-        {
-            if (StrokeItem *stroke = qgraphicsitem_cast<StrokeItem*>(item))
+        if (!selected.isEmpty()) {
+            storeUndo();
+            for (QGraphicsItem *item : selected)
             {
-                m_strokeItems.removeOne(stroke);
-                scene()->removeItem(stroke);
-                delete stroke;
-            }
-            else if (RectItem *rect = qgraphicsitem_cast<RectItem*>(item))
-            {
-                m_rectItems.removeOne(rect);
-                scene()->removeItem(rect);
-                delete rect;
+                if (StrokeItem *stroke = qgraphicsitem_cast<StrokeItem*>(item))
+                {
+                    m_strokeItems.removeOne(stroke);
+                    scene()->removeItem(stroke);
+                    delete stroke;
+                }
+                else if (RectItem *rect = qgraphicsitem_cast<RectItem*>(item))
+                {
+                    m_rectItems.removeOne(rect);
+                    scene()->removeItem(rect);
+                    delete rect;
+                }
             }
         }
         event->accept();
