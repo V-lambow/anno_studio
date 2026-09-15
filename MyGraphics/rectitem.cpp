@@ -150,6 +150,10 @@ QRectF RectItem::clampRectToBoundary(const QRectF &r) const
     if (m_boundary.isNull())
         return r;
     QRectF result = r;
+    if (result.width() > m_boundary.width())
+        result.setWidth(m_boundary.width());
+    if (result.height() > m_boundary.height())
+        result.setHeight(m_boundary.height());
     if (result.left() < m_boundary.left())
         result.moveLeft(m_boundary.left());
     if (result.top() < m_boundary.top())
@@ -192,8 +196,11 @@ void RectItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 
 void RectItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
+    bool wasActive = (m_activeHandle != None);
     m_activeHandle = None;
     QGraphicsRectItem::mouseReleaseEvent(event);
+    if (wasActive && m_onModified)
+        m_onModified();
 }
 
 QVariant RectItem::itemChange(GraphicsItemChange change, const QVariant &value)

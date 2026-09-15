@@ -242,6 +242,12 @@ border-color: rgb(255, 124, 64);</string>
      <addaction name="actionExportCocoDet"/>
      <addaction name="actionExportCocoSeg"/>
     </widget>
+    <widget class="QMenu" name="menu_data">
+     <property name="title">
+      <string>数据</string>
+     </property>
+     <addaction name="actionCreateDataset"/>
+    </widget>
     <widget class="QMenu" name="menu_5">
     <property name="title">
      <string>帮助</string>
@@ -251,6 +257,7 @@ border-color: rgb(255, 124, 64);</string>
    <addaction name="menu"/>
    <addaction name="menu_2"/>
     <addaction name="menu_3"/>
+    <addaction name="menu_data"/>
     <addaction name="menu_5"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -510,12 +517,17 @@ border-color: rgb(255, 124, 64);</string>
       <string>快捷键说明</string>
      </property>
     </action>
-    <action name="actionLabelStatistics">
-     <property name="text">
-      <string>标注统计</string>
-     </property>
-    </action>
-   </widget>
+     <action name="actionLabelStatistics">
+      <property name="text">
+       <string>标注统计</string>
+      </property>
+     </action>
+     <action name="actionCreateDataset">
+      <property name="text">
+       <string>数据集创建</string>
+      </property>
+     </action>
+    </widget>
  <customwidgets>
   <customwidget>
    <class>MyGraphicsView</class>

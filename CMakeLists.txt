@@ -43,6 +43,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         dlg/dlg_saigeinfer.h dlg/dlg_saigeinfer.cpp dlg/dlg_saigeinfer.ui
         dlg/dlg_ultrainfer.ui dlg/dlg_ultrainfer.h dlg/dlg_ultrainfer.cpp
         dlg/dlg_labelstatistics.h dlg/dlg_labelstatistics.cpp
+        dlg/dlg_dataset_split.h dlg/dlg_dataset_split.cpp
         halcon/lib/halconcpp.lib
         halcon/lib/halcon.lib
         halcon/lib/halconc.lib

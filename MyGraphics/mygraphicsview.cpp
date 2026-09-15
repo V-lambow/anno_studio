@@ -122,6 +122,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *e)
         m_rectStartPos = scenePos;
         RectItem *rect = new RectItem(m_penColor, m_penWidth, m_currentClassId);
         rect->setBoundary(m_drawBounds);
+        rect->setOnModified([this]() { emit sg_itemModified(); });
         m_rectItems.append(rect);
         scene()->addItem(rect);
         m_currentRect = rect;
@@ -419,8 +420,10 @@ void MyGraphicsView::restoreUndo()
         scene()->addItem(s);
 
     m_rectItems = snap.rects;
-    for (auto *r : m_rectItems)
+    for (auto *r : m_rectItems) {
+        r->setOnModified([this]() { emit sg_itemModified(); });
         scene()->addItem(r);
+    }
 
     m_currentStroke = nullptr;
     m_currentRect = nullptr;

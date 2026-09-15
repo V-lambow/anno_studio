@@ -9,6 +9,7 @@
 #include <QRectF>
 #include <QVector>
 #include <QCursor>
+#include <functional>
 
 class RectItem : public QGraphicsRectItem
 {
@@ -27,6 +28,7 @@ public:
 
     void setRectFromPoints(const QPointF &start, const QPointF &end);
     void setBoundary(const QRectF &boundary) { m_boundary = boundary; }
+    void setOnModified(std::function<void()> cb) { m_onModified = cb; }
     QVector<QPointF> getCornerPoints() const;
 
     QRectF boundingRect() const override;
@@ -53,6 +55,7 @@ private:
     QPointF m_pressPos;
     QRectF m_pressRect;
     QRectF m_boundary;
+    std::function<void()> m_onModified;
     qreal m_handleSize = 8.0;
 };
 

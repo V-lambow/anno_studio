@@ -27,6 +27,9 @@
 #include <QMessageBox>
 #include <QRandomGenerator>
 #include <QXmlStreamWriter>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <QProgressDialog>
 #include <json/json.h>
 #include "Halcon.h"
@@ -41,6 +44,7 @@
 #include "MyGraphics/roioverlayitem.h"
 #include "MyGraphics/canvasadjustmentwidget.h"
 #include "dlg/dlg_labelstatistics.h"
+#include "dlg/dlg_dataset_split.h"
 
 
 
@@ -137,6 +141,7 @@ private slots:
 
     void on_actionShortcuts_triggered();
     void on_actionLabelStatistics_triggered();
+    void on_actionCreateDataset_triggered();
     void saveLabelingData();
     void mergeOverlappingStrokes();
     void on_actionCreateRoi_triggered();
@@ -173,6 +178,30 @@ private:
     void loadCategories();
     void syncFilterComboBoxes();
     void applyFilter();
+
+    struct ImageInfo {
+        QString name;
+        QSet<QString> labels;
+        QString primaryLabel;
+        QMap<QString, double> labelAreas;
+    };
+    struct ClusterGroup {
+        int id;
+        QSet<QString> labels;
+    };
+
+    QList<ImageInfo> analyzeTrainImages(const QString &imageDir);
+    void runNormalSplit(const QString &srcDir, const QString &dstDir, double ratio,
+                        const QStringList &classes, int labelType);
+    void runClusterSplit(const QString &srcDir, const QString &dstDir, double ratio,
+                         const QStringList &classes, int labelType);
+    void generateYaml(const QString &yamlPath, const QString &datasetRoot,
+                      const QString &trainRel, const QString &valRel,
+                      const QStringList &classes);
+    void updateDataConfig(const QString &name, const QString &yamlPath);
+    void copyImageAndLabel(const QString &srcDir, const QString &imageName,
+                           const QString &dstDir, const QSet<QString> &allowedLabels = {});
+    void generateLabels(const QString &imageDir, const QStringList &classes, int labelType);
 
 private:
     Ui::MainWindow *ui;

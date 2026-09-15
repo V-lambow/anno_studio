@@ -54,6 +54,7 @@ signals:
     void sg_itemErasedCompletely(StrokeItem *item);
     void sg_roiDrawn(const QRectF &rect);
     void sg_undoRestored();
+    void sg_itemModified();
 
     // void itemHovered(MyGraphicsItem *item);
 

@@ -237,6 +237,8 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(ui->graphicsView, &MyGraphicsView::sg_undoRestored,
             this, &MainWindow::saveLabelingData);
+    connect(ui->graphicsView, &MyGraphicsView::sg_itemModified,
+            this, &MainWindow::saveLabelingData);
 
     {
         QLibrary saigeLib("SaigeVision.dll");
@@ -1701,6 +1703,8 @@ void MainWindow::showLabelingPatterns()
         if (pts.size() == 4) {
             RectItem *item = new RectItem(color, 3, classId);
             item->setRectFromPoints(pts[0], pts[2]);
+            item->setBoundary(ui->graphicsView->drawBounds());
+            item->setOnModified([this]() { saveLabelingData(); });
             m_scene->addItem(item);
             m_labelingItems.append(item);
             ui->graphicsView->addRect(item);
@@ -2259,7 +2263,6 @@ void MainWindow::saveLabelingData()
         RectItem *rect = dynamic_cast<RectItem*>(item);
         if (rect) {
             QString className = m_labelsComboBox->itemText(rect->classId());
-            QVector<QPointF> points = rect->getCornerPoints();
 
             Json::Value obj;
             obj["classname"] = className.toStdString();
@@ -2268,17 +2271,21 @@ void MainWindow::saveLabelingData()
             qreal area = r.width() * r.height();
             obj["area"] = (unsigned int)(std::abs(area));
 
+            QPointF tl = rect->mapToScene(r.topLeft());
+            QPointF br = rect->mapToScene(r.bottomRight());
             obj["bbox"] = Json::Value(Json::arrayValue);
-            obj["bbox"].append(r.x());
-            obj["bbox"].append(r.y());
-            obj["bbox"].append(r.width());
-            obj["bbox"].append(r.height());
+            obj["bbox"].append(tl.x());
+            obj["bbox"].append(tl.y());
+            obj["bbox"].append(br.x() - tl.x());
+            obj["bbox"].append(br.y() - tl.y());
 
+            QVector<QPointF> corners = rect->getCornerPoints();
             obj["points"] = Json::Value(Json::arrayValue);
-            for (const auto& pt : points) {
+            for (const auto& pt : corners) {
+                QPointF sp = rect->mapToScene(pt);
                 Json::Value pnt;
-                pnt.append(pt.x());
-                pnt.append(pt.y());
+                pnt.append(sp.x());
+                pnt.append(sp.y());
                 obj["points"].append(pnt);
             }
 
@@ -2974,6 +2981,840 @@ void MainWindow::applyFilter()
                 ui->non_train_list->addItem(fileName);
             else
                 ui->train_list->addItem(fileName);
+        }
+    }
+}
+
+void MainWindow::on_actionCreateDataset_triggered()
+{
+    if (m_curProjectPath.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先打开项目");
+        return;
+    }
+
+    DatasetSplitDialog dlg(this);
+    connect(&dlg, &DatasetSplitDialog::sg_confirm, this,
+        [this](const QString &name, int method, double ratio, int labelType) {
+        QString srcDir = m_curProjectPath + "/train/image";
+        if (!QDir(srcDir).exists()) {
+            QMessageBox::warning(this, "警告", "train/image 目录不存在");
+            return;
+        }
+
+        QString dstDir = m_curProjectPath + "/" + name;
+        QDir().mkpath(dstDir);
+
+        QStringList classes;
+        QDir srcQDir(srcDir);
+        QStringList nameFilters;
+        nameFilters << "*_labeling.json";
+        QStringList jsonFiles = srcQDir.entryList(nameFilters, QDir::Files);
+        QSet<QString> classSet;
+        for (const QString &jf : jsonFiles) {
+            QFile f(srcQDir.filePath(jf));
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+            QByteArray data = f.readAll();
+            f.close();
+            Json::Value root;
+            Json::Reader reader;
+            if (!reader.parse(data.toStdString(), root) || !root.isArray()) continue;
+            for (const auto &obj : root) {
+                if (obj.isMember("classname"))
+                    classSet.insert(QString::fromStdString(obj["classname"].asString()));
+            }
+        }
+        classes = classSet.values();
+        classes.sort();
+
+        if (method == 0) {
+            runNormalSplit(srcDir, dstDir, ratio, classes, labelType);
+        } else {
+            runClusterSplit(srcDir, dstDir, ratio, classes, labelType);
+        }
+
+        QString yamlDir = m_curProjectPath + "/datayaml";
+        QDir().mkpath(yamlDir);
+
+        if (method == 0) {
+            QString yamlPath = yamlDir + "/" + name + ".yaml";
+            generateYaml(yamlPath, dstDir, "train/image", "val/image", classes);
+            updateDataConfig(name, "datayaml/" + name + ".yaml");
+        } else {
+            QDir d(dstDir);
+            QStringList gDirs = d.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QString &g : gDirs) {
+                if (!g.startsWith("g")) continue;
+                QSet<QString> gClasses;
+                QDir gDirTrain(dstDir + "/" + g + "/train/image");
+                QDir gDirVal(dstDir + "/" + g + "/val/image");
+                QStringList gJsons = gDirTrain.entryList(QStringList() << "*_labeling.json", QDir::Files);
+                gJsons += gDirVal.entryList(QStringList() << "*_labeling.json", QDir::Files);
+                for (const QString &jf : gJsons) {
+                    QString jfPath = gDirTrain.exists(jf) ? gDirTrain.filePath(jf) : gDirVal.filePath(jf);
+                    QFile f(jfPath);
+                    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+                    QByteArray data = f.readAll();
+                    f.close();
+                    Json::Value root;
+                    Json::Reader reader;
+                    if (!reader.parse(data.toStdString(), root) || !root.isArray()) continue;
+                    for (const auto &obj : root) {
+                        if (obj.isMember("classname"))
+                            gClasses.insert(QString::fromStdString(obj["classname"].asString()));
+                    }
+                }
+                QStringList gClassList = gClasses.values();
+                gClassList.sort();
+                QString yamlPath = yamlDir + "/" + name + "_" + g + ".yaml";
+                generateYaml(yamlPath, dstDir, g + "/train/image", g + "/val/image", gClassList);
+                updateDataConfig(name + "_" + g, "datayaml/" + name + "_" + g + ".yaml");
+            }
+        }
+
+        QMessageBox::information(this, "完成", "数据集创建完成");
+    });
+    dlg.exec();
+}
+
+QList<MainWindow::ImageInfo> MainWindow::analyzeTrainImages(const QString &imageDir)
+{
+    QList<ImageInfo> result;
+    QMap<QString, int> labelCount;
+
+    QDir dir(imageDir);
+    QStringList imgFilters;
+    imgFilters << "*.tif" << "*.tiff" << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
+    QStringList images = dir.entryList(imgFilters, QDir::Files);
+
+    QMap<QString, QSet<QString>> imageLabels;
+    QMap<QString, QMap<QString, double>> imageAreas;
+
+    for (const QString &imgName : images) {
+        QString baseName = imgName;
+        int dotPos = baseName.lastIndexOf('.');
+        if (dotPos > 0) baseName.chop(baseName.size() - dotPos);
+
+        QString jsonPath = dir.filePath(baseName + "_labeling.json");
+        if (!QFile::exists(jsonPath)) continue;
+
+        QFile f(jsonPath);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+        QByteArray data = f.readAll();
+        f.close();
+
+        Json::Value root;
+        Json::Reader reader;
+        if (!reader.parse(data.toStdString(), root) || !root.isArray()) continue;
+
+        QSet<QString> labels;
+        QMap<QString, double> areas;
+        for (const auto &obj : root) {
+            if (!obj.isMember("classname")) continue;
+            QString cls = QString::fromStdString(obj["classname"].asString());
+            labels.insert(cls);
+            double area = 0;
+            if (obj.isMember("area")) {
+                area = obj["area"].asDouble();
+            } else if (obj.isMember("bbox") && obj["bbox"].isArray() && obj["bbox"].size() == 4) {
+                area = obj["bbox"][2].asDouble() * obj["bbox"][3].asDouble();
+            }
+            areas[cls] += area;
+        }
+
+        for (const QString &l : labels) {
+            labelCount[l]++;
+        }
+        imageLabels[imgName] = labels;
+        imageAreas[imgName] = areas;
+    }
+
+    for (auto it = imageLabels.begin(); it != imageLabels.end(); ++it) {
+        ImageInfo info;
+        info.name = it.key();
+        info.labels = it.value();
+        info.labelAreas = imageAreas[it.key()];
+
+        QString rarest;
+        int minCount = INT_MAX;
+        for (const QString &l : info.labels) {
+            if (labelCount[l] < minCount) {
+                minCount = labelCount[l];
+                rarest = l;
+            }
+        }
+        info.primaryLabel = rarest;
+        result.append(info);
+    }
+
+    return result;
+}
+
+void MainWindow::runNormalSplit(const QString &srcDir, const QString &dstDir, double ratio,
+                                const QStringList &classes, int labelType)
+{
+    QList<ImageInfo> images = analyzeTrainImages(srcDir);
+    if (images.isEmpty()) {
+        QMessageBox::information(this, "提示", "未找到带标注的图片");
+        return;
+    }
+
+    QMap<QString, QList<ImageInfo>> classified;
+    for (const ImageInfo &info : images) {
+        classified[info.primaryLabel].append(info);
+    }
+
+    QList<ImageInfo> trainList, valList;
+
+    for (auto it = classified.begin(); it != classified.end(); ++it) {
+        QList<ImageInfo> group = it.value();
+        QRandomGenerator *rng = QRandomGenerator::global();
+        for (int i = group.size() - 1; i > 0; --i) {
+            int j = rng->bounded(i + 1);
+            qSwap(group[i], group[j]);
+        }
+
+        int count = group.size();
+        if (count < 20) {
+            if (count == 1) {
+                trainList.append(group);
+            } else {
+                for (int i = 0; i < count - 1; ++i) trainList.append(group[i]);
+                valList.append(group[count - 1]);
+            }
+        } else {
+            int splitIdx = static_cast<int>(count * ratio);
+            for (int i = 0; i < splitIdx; ++i) trainList.append(group[i]);
+            for (int i = splitIdx; i < count; ++i) valList.append(group[i]);
+        }
+    }
+
+    QString trainDir = dstDir + "/train/image";
+    QString valDir = dstDir + "/val/image";
+    QDir().mkpath(trainDir);
+    QDir().mkpath(valDir);
+
+    for (const ImageInfo &info : trainList) {
+        copyImageAndLabel(srcDir, info.name, trainDir);
+    }
+    for (const ImageInfo &info : valList) {
+        copyImageAndLabel(srcDir, info.name, valDir);
+    }
+
+    generateLabels(trainDir, classes, labelType);
+    generateLabels(valDir, classes, labelType);
+}
+
+void MainWindow::runClusterSplit(const QString &srcDir, const QString &dstDir, double ratio,
+                                 const QStringList &classes, int labelType)
+{
+    QList<ImageInfo> images = analyzeTrainImages(srcDir);
+    if (images.isEmpty()) {
+        QMessageBox::information(this, "提示", "未找到带标注的图片");
+        return;
+    }
+
+    QMap<QString, int> labelImageCount;
+    QMap<QString, double> labelTotalArea;
+    QMap<QString, int> labelInstanceCount;
+
+    for (const ImageInfo &info : images) {
+        for (const QString &l : info.labels) {
+            labelImageCount[l]++;
+        }
+        for (auto it = info.labelAreas.begin(); it != info.labelAreas.end(); ++it) {
+            labelTotalArea[it.key()] += it.value();
+            labelInstanceCount[it.key()]++;
+        }
+    }
+
+    QMap<QString, double> labelMeanArea;
+    for (const QString &l : labelImageCount.keys()) {
+        if (labelInstanceCount[l] > 0)
+            labelMeanArea[l] = labelTotalArea[l] / labelInstanceCount[l];
+        else
+            labelMeanArea[l] = 1.0;
+    }
+
+    QStringList sortedLabels = labelImageCount.keys();
+    sortedLabels.sort();
+
+    if (sortedLabels.size() < 2) {
+        QMessageBox::information(this, "提示", "标签数量不足，无法聚类");
+        return;
+    }
+
+    int n = sortedLabels.size();
+    QVector<QVector<double>> features(n, QVector<double>(2));
+    double freqMean = 0, areaMean = 0, freqStd = 0, areaStd = 0;
+
+    for (int i = 0; i < n; ++i) {
+        features[i][0] = log1p(labelImageCount[sortedLabels[i]]);
+        features[i][1] = log1p(labelMeanArea[sortedLabels[i]]);
+        freqMean += features[i][0];
+        areaMean += features[i][1];
+    }
+    freqMean /= n;
+    areaMean /= n;
+
+    for (int i = 0; i < n; ++i) {
+        freqStd += (features[i][0] - freqMean) * (features[i][0] - freqMean);
+        areaStd += (features[i][1] - areaMean) * (features[i][1] - areaMean);
+    }
+    freqStd = sqrt(freqStd / n);
+    areaStd = sqrt(areaStd / n);
+    if (freqStd < 1e-10) freqStd = 1.0;
+    if (areaStd < 1e-10) areaStd = 1.0;
+
+    for (int i = 0; i < n; ++i) {
+        features[i][0] = (features[i][0] - freqMean) / freqStd;
+        features[i][1] = (features[i][1] - areaMean) / areaStd;
+    }
+
+    int bestK = 2;
+    double bestSil = -1.0;
+    int maxK = qMin(10, n - 1);
+
+    for (int k = 2; k <= maxK; ++k) {
+        QVector<int> assignments(n, 0);
+        QVector<QVector<double>> centers(k, QVector<double>(2, 0.0));
+
+        QRandomGenerator *rng = QRandomGenerator::global();
+        QVector<int> initIdx;
+        while (initIdx.size() < k) {
+            int idx = rng->bounded(n);
+            if (!initIdx.contains(idx)) initIdx.append(idx);
+        }
+        for (int c = 0; c < k; ++c) {
+            centers[c][0] = features[initIdx[c]][0];
+            centers[c][1] = features[initIdx[c]][1];
+        }
+
+        for (int iter = 0; iter < 20; ++iter) {
+            for (int i = 0; i < n; ++i) {
+                double minDist = 1e30;
+                int bestCluster = 0;
+                for (int c = 0; c < k; ++c) {
+                    double dx = features[i][0] - centers[c][0];
+                    double dy = features[i][1] - centers[c][1];
+                    double dist = dx * dx + dy * dy;
+                    if (dist < minDist) {
+                        minDist = dist;
+                        bestCluster = c;
+                    }
+                }
+                assignments[i] = bestCluster;
+            }
+
+            QVector<int> counts(k, 0);
+            for (int c = 0; c < k; ++c) {
+                centers[c][0] = 0;
+                centers[c][1] = 0;
+            }
+            for (int i = 0; i < n; ++i) {
+                int c = assignments[i];
+                centers[c][0] += features[i][0];
+                centers[c][1] += features[i][1];
+                counts[c]++;
+            }
+            for (int c = 0; c < k; ++c) {
+                if (counts[c] > 0) {
+                    centers[c][0] /= counts[c];
+                    centers[c][1] /= counts[c];
+                }
+            }
+        }
+
+        double silTotal = 0;
+        for (int i = 0; i < n; ++i) {
+            double aDist = 0;
+            int aCount = 0;
+            for (int j = 0; j < n; ++j) {
+                if (j == i || assignments[j] != assignments[i]) continue;
+                double dx = features[i][0] - features[j][0];
+                double dy = features[i][1] - features[j][1];
+                aDist += sqrt(dx * dx + dy * dy);
+                aCount++;
+            }
+            double a = (aCount > 0) ? aDist / aCount : 0;
+
+            double b = 1e30;
+            for (int c = 0; c < k; ++c) {
+                if (c == assignments[i]) continue;
+                double bDist = 0;
+                int bCount = 0;
+                for (int j = 0; j < n; ++j) {
+                    if (assignments[j] != c) continue;
+                    double dx = features[i][0] - features[j][0];
+                    double dy = features[i][1] - features[j][1];
+                    bDist += sqrt(dx * dx + dy * dy);
+                    bCount++;
+                }
+                if (bCount > 0) {
+                    double avg = bDist / bCount;
+                    if (avg < b) b = avg;
+                }
+            }
+
+            double s = (b > a) ? (b - a) / qMax(a, b) : 0;
+            silTotal += s;
+        }
+        double silAvg = silTotal / n;
+
+        if (silAvg > bestSil) {
+            bestSil = silAvg;
+            bestK = k;
+        }
+    }
+
+    int k = bestK;
+    QVector<int> assignments(n, 0);
+    QVector<QVector<double>> centers(k, QVector<double>(2, 0.0));
+
+    QRandomGenerator *rng = QRandomGenerator::global();
+    QVector<int> initIdx;
+    while (initIdx.size() < k) {
+        int idx = rng->bounded(n);
+        if (!initIdx.contains(idx)) initIdx.append(idx);
+    }
+    for (int c = 0; c < k; ++c) {
+        centers[c][0] = features[initIdx[c]][0];
+        centers[c][1] = features[initIdx[c]][1];
+    }
+
+    for (int iter = 0; iter < 20; ++iter) {
+        for (int i = 0; i < n; ++i) {
+            double minDist = 1e30;
+            int bestCluster = 0;
+            for (int c = 0; c < k; ++c) {
+                double dx = features[i][0] - centers[c][0];
+                double dy = features[i][1] - centers[c][1];
+                double dist = dx * dx + dy * dy;
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestCluster = c;
+                }
+            }
+            assignments[i] = bestCluster;
+        }
+
+        QVector<int> counts(k, 0);
+        for (int c = 0; c < k; ++c) {
+            centers[c][0] = 0;
+            centers[c][1] = 0;
+        }
+        for (int i = 0; i < n; ++i) {
+            int c = assignments[i];
+            centers[c][0] += features[i][0];
+            centers[c][1] += features[i][1];
+            counts[c]++;
+        }
+        for (int c = 0; c < k; ++c) {
+            if (counts[c] > 0) {
+                centers[c][0] /= counts[c];
+                centers[c][1] /= counts[c];
+            }
+        }
+    }
+
+    QVector<QSet<QString>> groupLabels(k);
+    for (int i = 0; i < n; ++i) {
+        groupLabels[assignments[i]].insert(sortedLabels[i]);
+    }
+
+    QList<ImageInfo> trainList, valList;
+    QMap<QString, double> imageTotalArea;
+    for (const ImageInfo &info : images) {
+        double total = 0;
+        for (auto it = info.labelAreas.begin(); it != info.labelAreas.end(); ++it) {
+            total += it.value();
+        }
+        imageTotalArea[info.name] = total;
+    }
+
+    QList<QPair<QString, double>> sortedImages;
+    for (const ImageInfo &info : images) {
+        sortedImages.append({info.name, imageTotalArea[info.name]});
+    }
+    std::sort(sortedImages.begin(), sortedImages.end(),
+              [](const QPair<QString, double> &a, const QPair<QString, double> &b) {
+                  return a.second < b.second;
+              });
+
+    int totalN = sortedImages.size();
+    double halfTrain = ratio / 2.0;
+    int splitStart = static_cast<int>(totalN * halfTrain);
+    int splitEnd = static_cast<int>(totalN * (1.0 - halfTrain));
+
+    for (int i = 0; i < splitStart; ++i) {
+        const ImageInfo &info = *std::find_if(images.begin(), images.end(),
+            [&](const ImageInfo &x) { return x.name == sortedImages[i].first; });
+        trainList.append(info);
+    }
+    for (int i = splitEnd; i < totalN; ++i) {
+        const ImageInfo &info = *std::find_if(images.begin(), images.end(),
+            [&](const ImageInfo &x) { return x.name == sortedImages[i].first; });
+        trainList.append(info);
+    }
+    for (int i = splitStart; i < splitEnd; ++i) {
+        const ImageInfo &info = *std::find_if(images.begin(), images.end(),
+            [&](const ImageInfo &x) { return x.name == sortedImages[i].first; });
+        valList.append(info);
+    }
+
+    for (int gi = 0; gi < k; ++gi) {
+        QString gTrainDir = dstDir + "/g" + QString::number(gi) + "/train/image";
+        QString gValDir = dstDir + "/g" + QString::number(gi) + "/val/image";
+        QDir().mkpath(gTrainDir);
+        QDir().mkpath(gValDir);
+
+        for (const ImageInfo &info : trainList) {
+            if (!info.labels.intersects(groupLabels[gi])) continue;
+            copyImageAndLabel(srcDir, info.name, gTrainDir, groupLabels[gi]);
+        }
+        for (const ImageInfo &info : valList) {
+            if (!info.labels.intersects(groupLabels[gi])) continue;
+            copyImageAndLabel(srcDir, info.name, gValDir, groupLabels[gi]);
+        }
+
+        QStringList gClassList = groupLabels[gi].values();
+        gClassList.sort();
+        generateLabels(gTrainDir, gClassList, labelType);
+        generateLabels(gValDir, gClassList, labelType);
+    }
+}
+
+void MainWindow::generateYaml(const QString &yamlPath, const QString &datasetRoot,
+                              const QString &trainRel, const QString &valRel,
+                              const QStringList &classes)
+{
+    QFile f(yamlPath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    QTextStream out(&f);
+    out << "# Ultralytics AGPL-3.0 License\n";
+    out << "#\n";
+    out << "# Train/val sets\n";
+    out << "path: " << datasetRoot << "\n";
+    out << "train: " << trainRel << "\n";
+    out << "val: " << valRel << "\n";
+    out << "test: \n";
+    out << "\n";
+    out << "# Classes\n";
+    out << "names:\n";
+    for (int i = 0; i < classes.size(); ++i) {
+        out << "  " << i << ": " << classes[i] << "\n";
+    }
+    f.close();
+}
+
+void MainWindow::updateDataConfig(const QString &name, const QString &yamlPath)
+{
+    QString jsonPath = m_curProjectPath + "/data_config.json";
+    Json::Value root;
+    Json::Reader reader;
+    QFile file(jsonPath);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QByteArray jsonData = file.readAll();
+        file.close();
+        reader.parse(jsonData.toStdString(), root);
+    }
+
+    Json::Value groupObj;
+    groupObj["name"] = name.toStdString();
+    groupObj["yaml_path"] = yamlPath.toStdString();
+
+    bool found = false;
+    if (root.isMember("data_group")) {
+        Json::Value &arr = root["data_group"];
+        for (Json::ArrayIndex i = 0; i < arr.size(); ++i) {
+            if (arr[i]["name"].asString() == name.toStdString()) {
+                arr[i] = groupObj;
+                found = true;
+                break;
+            }
+        }
+        if (!found) arr.append(groupObj);
+    } else {
+        Json::Value arr;
+        arr.append(groupObj);
+        root["data_group"] = arr;
+    }
+
+    Json::FastWriter writer;
+    std::string jsonStr = writer.write(root);
+    QFile outFile(jsonPath);
+    if (outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&outFile);
+        out << QString::fromStdString(jsonStr);
+    }
+}
+
+void MainWindow::copyImageAndLabel(const QString &srcDir, const QString &imageName,
+                                   const QString &dstDir, const QSet<QString> &allowedLabels)
+{
+    QString srcPath = srcDir + "/" + imageName;
+    if (QFile::exists(srcPath)) {
+        QFile::copy(srcPath, dstDir + "/" + imageName);
+    }
+
+    int dotPos = imageName.lastIndexOf('.');
+    QString baseName = (dotPos > 0) ? imageName.left(dotPos) : imageName;
+    QString jsonSrc = srcDir + "/" + baseName + "_labeling.json";
+    QString jsonDst = dstDir + "/" + baseName + "_labeling.json";
+
+    if (!QFile::exists(jsonSrc)) return;
+
+    if (allowedLabels.isEmpty()) {
+        QFile::copy(jsonSrc, jsonDst);
+        return;
+    }
+
+    QFile f(jsonSrc);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    QByteArray data = f.readAll();
+    f.close();
+
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(data.toStdString(), root) || !root.isArray()) return;
+
+    Json::Value filtered;
+    for (const auto &obj : root) {
+        if (obj.isMember("classname")) {
+            QString cls = QString::fromStdString(obj["classname"].asString());
+            if (allowedLabels.contains(cls)) {
+                filtered.append(obj);
+            }
+        }
+    }
+
+    Json::FastWriter writer;
+    std::string jsonStr = writer.write(filtered);
+    QFile outF(jsonDst);
+    if (outF.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&outF);
+        out << QString::fromStdString(jsonStr);
+    }
+}
+
+void MainWindow::generateLabels(const QString &imageDir, const QStringList &classes, int labelType)
+{
+    QDir dir(imageDir);
+    QStringList imgFilters;
+    imgFilters << "*.tif" << "*.tiff" << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
+    QStringList images = dir.entryList(imgFilters, QDir::Files);
+
+    QString labelDir = imageDir;
+    labelDir.replace("/image", "/label");
+    QDir().mkpath(labelDir);
+
+    for (const QString &imgName : images) {
+        int dotPos = imgName.lastIndexOf('.');
+        QString baseName = (dotPos > 0) ? imgName.left(dotPos) : imgName;
+        QString jsonPath = dir.filePath(baseName + "_labeling.json");
+        if (!QFile::exists(jsonPath)) continue;
+
+        QFile f(jsonPath);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+        QByteArray data = f.readAll();
+        f.close();
+
+        Json::Value root;
+        Json::Reader reader;
+        if (!reader.parse(data.toStdString(), root) || !root.isArray()) continue;
+
+        QImage img(dir.filePath(imgName));
+        if (img.isNull()) continue;
+        int imgW = img.width();
+        int imgH = img.height();
+
+        if (labelType == 0) {
+            QString outPath = labelDir + "/" + baseName + ".txt";
+            QFile outFile(outPath);
+            if (!outFile.open(QIODevice::WriteOnly | QIODevice::Text)) continue;
+            QTextStream ts(&outFile);
+            for (const auto &obj : root) {
+                if (!obj.isMember("classname") || !obj.isMember("bbox")) continue;
+                QString cls = QString::fromStdString(obj["classname"].asString());
+                int classId = classes.indexOf(cls);
+                if (classId < 0) continue;
+                double bx = obj["bbox"][0].asDouble();
+                double by = obj["bbox"][1].asDouble();
+                double bw = obj["bbox"][2].asDouble();
+                double bh = obj["bbox"][3].asDouble();
+                double cx = (bx + bw / 2.0) / imgW;
+                double cy = (by + bh / 2.0) / imgH;
+                double nw = bw / imgW;
+                double nh = bh / imgH;
+                ts << classId << " "
+                   << QString::number(cx, 'f', 6) << " "
+                   << QString::number(cy, 'f', 6) << " "
+                   << QString::number(nw, 'f', 6) << " "
+                   << QString::number(nh, 'f', 6) << "\n";
+            }
+        } else if (labelType == 1) {
+            QString outPath = labelDir + "/" + baseName + ".txt";
+            QFile outFile(outPath);
+            if (!outFile.open(QIODevice::WriteOnly | QIODevice::Text)) continue;
+            QTextStream ts(&outFile);
+            for (const auto &obj : root) {
+                if (!obj.isMember("classname") || !obj.isMember("points")) continue;
+                QString cls = QString::fromStdString(obj["classname"].asString());
+                int classId = classes.indexOf(cls);
+                if (classId < 0) continue;
+                const Json::Value &pts = obj["points"];
+                if (pts.size() < 3) continue;
+                ts << classId;
+                for (const auto &pt : pts) {
+                    if (!pt.isArray() || pt.size() < 2) continue;
+                    ts << " " << QString::number(pt[0].asDouble() / imgW, 'f', 6)
+                       << " " << QString::number(pt[1].asDouble() / imgH, 'f', 6);
+                }
+                ts << "\n";
+            }
+        } else if (labelType == 2 || labelType == 3) {
+            QString outPath = labelDir + "/" + baseName + ".xml";
+            QFile outFile(outPath);
+            if (!outFile.open(QIODevice::WriteOnly | QIODevice::Text)) continue;
+            QXmlStreamWriter xml(&outFile);
+            xml.setAutoFormatting(true);
+            xml.writeStartDocument();
+            xml.writeStartElement("annotation");
+            xml.writeTextElement("filename", imgName);
+            xml.writeStartElement("size");
+            xml.writeTextElement("width", QString::number(imgW));
+            xml.writeTextElement("height", QString::number(imgH));
+            xml.writeTextElement("depth", "3");
+            xml.writeEndElement();
+            for (const auto &obj : root) {
+                if (!obj.isMember("classname")) continue;
+                QString cls = QString::fromStdString(obj["classname"].asString());
+                xml.writeStartElement("object");
+                xml.writeTextElement("name", cls);
+                if (labelType == 2 && obj.isMember("bbox") && obj["bbox"].isArray() && obj["bbox"].size() == 4) {
+                    double bx = obj["bbox"][0].asDouble();
+                    double by = obj["bbox"][1].asDouble();
+                    double bw = obj["bbox"][2].asDouble();
+                    double bh = obj["bbox"][3].asDouble();
+                    xml.writeStartElement("bndbox");
+                    xml.writeTextElement("xmin", QString::number(int(bx)));
+                    xml.writeTextElement("ymin", QString::number(int(by)));
+                    xml.writeTextElement("xmax", QString::number(int(bx + bw)));
+                    xml.writeTextElement("ymax", QString::number(int(by + bh)));
+                    xml.writeEndElement();
+                } else if (labelType == 3 && obj.isMember("points") && obj["points"].isArray()) {
+                    const Json::Value &pts = obj["points"];
+                    qreal minX = 0, maxX = 0, minY = 0, maxY = 0;
+                    if (pts.size() > 0 && pts[0].isArray() && pts[0].size() >= 2) {
+                        minX = maxX = pts[0][0].asDouble();
+                        minY = maxY = pts[0][1].asDouble();
+                    }
+                    for (const auto &pt : pts) {
+                        if (!pt.isArray() || pt.size() < 2) continue;
+                        qreal px = pt[0].asDouble(), py = pt[1].asDouble();
+                        if (px < minX) minX = px;
+                        if (px > maxX) maxX = px;
+                        if (py < minY) minY = py;
+                        if (py > maxY) maxY = py;
+                    }
+                    xml.writeStartElement("bndbox");
+                    xml.writeTextElement("xmin", QString::number(int(minX)));
+                    xml.writeTextElement("ymin", QString::number(int(minY)));
+                    xml.writeTextElement("xmax", QString::number(int(maxX)));
+                    xml.writeTextElement("ymax", QString::number(int(maxY)));
+                    xml.writeEndElement();
+                    xml.writeStartElement("polygon");
+                    for (int i = 0; i < pts.size(); ++i) {
+                        if (!pts[i].isArray() || pts[i].size() < 2) continue;
+                        xml.writeTextElement(QString("x%1").arg(i+1), QString::number(pts[i][0].asDouble()));
+                        xml.writeTextElement(QString("y%1").arg(i+1), QString::number(pts[i][1].asDouble()));
+                    }
+                    xml.writeEndElement();
+                }
+                xml.writeEndElement();
+            }
+            xml.writeEndElement();
+        } else if (labelType == 4 || labelType == 5) {
+            QString outPath = labelDir + "/" + baseName + ".json";
+            QJsonObject coco;
+            QJsonArray cats;
+            for (int i = 0; i < classes.size(); ++i) {
+                QJsonObject cat;
+                cat["id"] = i + 1;
+                cat["name"] = classes[i];
+                cat["supercategory"] = "";
+                cats.append(cat);
+            }
+            coco["categories"] = cats;
+
+            QJsonArray imagesArr;
+            QJsonObject imgObj;
+            imgObj["id"] = 0;
+            imgObj["file_name"] = imgName;
+            imgObj["width"] = imgW;
+            imgObj["height"] = imgH;
+            imagesArr.append(imgObj);
+            coco["images"] = imagesArr;
+
+            QJsonArray annotations;
+            int annId = 0;
+            for (const auto &obj : root) {
+                if (!obj.isMember("classname")) continue;
+                QString cls = QString::fromStdString(obj["classname"].asString());
+                int classId = classes.indexOf(cls);
+                if (classId < 0) continue;
+
+                QJsonObject ann;
+                ann["id"] = annId++;
+                ann["image_id"] = 0;
+                ann["category_id"] = classId + 1;
+                ann["iscrowd"] = 0;
+
+                if (labelType == 4 && obj.isMember("bbox") && obj["bbox"].isArray() && obj["bbox"].size() == 4) {
+                    double bx = obj["bbox"][0].asDouble();
+                    double by = obj["bbox"][1].asDouble();
+                    double bw = obj["bbox"][2].asDouble();
+                    double bh = obj["bbox"][3].asDouble();
+                    ann["bbox"] = QJsonArray{bx, by, bw, bh};
+                    ann["area"] = bw * bh;
+                } else if (labelType == 5 && obj.isMember("points") && obj["points"].isArray()) {
+                    const Json::Value &pts = obj["points"];
+                    QJsonArray seg;
+                    QJsonArray flat;
+                    qreal minX = 0, maxX = 0, minY = 0, maxY = 0;
+                    if (pts.size() > 0 && pts[0].isArray() && pts[0].size() >= 2) {
+                        minX = maxX = pts[0][0].asDouble();
+                        minY = maxY = pts[0][1].asDouble();
+                    }
+                    for (const auto &pt : pts) {
+                        if (!pt.isArray() || pt.size() < 2) continue;
+                        qreal px = pt[0].asDouble(), py = pt[1].asDouble();
+                        flat.append(px);
+                        flat.append(py);
+                        if (px < minX) minX = px;
+                        if (px > maxX) maxX = px;
+                        if (py < minY) minY = py;
+                        if (py > maxY) maxY = py;
+                    }
+                    seg.append(flat);
+                    ann["segmentation"] = seg;
+                    ann["bbox"] = QJsonArray{minX, minY, maxX - minX, maxY - minY};
+                    double area = 0;
+                    int n = flat.size() / 2;
+                    for (int i = 0; i < n; ++i) {
+                        int j = (i + 1) % n;
+                        area += flat[i*2].toDouble() * flat[j*2+1].toDouble();
+                        area -= flat[j*2].toDouble() * flat[i*2+1].toDouble();
+                    }
+                    ann["area"] = std::abs(area) / 2.0;
+                }
+                annotations.append(ann);
+            }
+            coco["annotations"] = annotations;
+
+            QFile outFile(outPath);
+            if (outFile.open(QIODevice::WriteOnly)) {
+                outFile.write(QJsonDocument(coco).toJson());
+            }
         }
     }
 }
