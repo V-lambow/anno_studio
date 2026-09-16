@@ -4,11 +4,11 @@
  <widget class="QDialog" name="Ultrainfer">
   <property name="geometry">
    <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>600</width>
-    <height>420</height>
-   </rect>
+     <x>0</x>
+     <y>0</y>
+     <width>600</width>
+     <height>520</height>
+    </rect>
   </property>
   <property name="windowTitle">
    <string>Ultralytics</string>
@@ -27,34 +27,69 @@
        <item>
         <layout class="QGridLayout" name="gridLayout_train">
          <item row="0" column="0">
+          <widget class="QLabel" name="alias_label">
+           <property name="text">
+            <string>训练别名:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1" colspan="5">
+          <widget class="QLineEdit" name="alias_lineEdit">
+           <property name="placeholderText">
+            <string>本次训练的名称标识</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="dataYaml_label">
+           <property name="text">
+            <string>数据集配置:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1" colspan="5">
+          <widget class="QLineEdit" name="dataYaml_lineEdit">
+           <property name="placeholderText">
+            <string>选择 .yaml 数据集配置文件</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="6">
+          <widget class="QPushButton" name="dataYaml_btn">
+           <property name="text">
+            <string>查找</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
           <widget class="QLabel" name="modelPath_label">
            <property name="text">
             <string>模型路径:</string>
            </property>
           </widget>
          </item>
-         <item row="0" column="1" colspan="5">
+         <item row="2" column="1" colspan="5">
           <widget class="QLineEdit" name="modelPath_lineEdit">
            <property name="placeholderText">
             <string>选择 .pt 权重文件</string>
            </property>
           </widget>
          </item>
-         <item row="0" column="6">
+         <item row="2" column="6">
           <widget class="QPushButton" name="modelPath_btn">
            <property name="text">
             <string>查找</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
+         <item row="3" column="0">
           <widget class="QLabel" name="task_label">
            <property name="text">
             <string>任务类型:</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="1">
+         <item row="3" column="1">
           <widget class="QComboBox" name="task_cbBox">
            <item>
             <property name="text">
@@ -78,14 +113,14 @@
            </item>
           </widget>
          </item>
-         <item row="1" column="4">
+         <item row="4" column="0">
           <widget class="QLabel" name="device_label">
            <property name="text">
             <string>训练设备:</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="5">
+         <item row="4" column="1">
           <widget class="QComboBox" name="device_cbBox">
            <item>
             <property name="text">
@@ -119,14 +154,14 @@
            </item>
           </widget>
          </item>
-         <item row="2" column="0">
+         <item row="5" column="0">
           <widget class="QLabel" name="epochs_label">
            <property name="text">
             <string>训练轮数:</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="1">
+         <item row="5" column="1">
           <widget class="QSpinBox" name="epochs_spinBox">
            <property name="minimum">
             <number>1</number>
@@ -139,21 +174,21 @@
            </property>
           </widget>
          </item>
-         <item row="2" column="2">
+         <item row="5" column="2">
           <widget class="QCheckBox" name="resume_ckBox">
            <property name="text">
             <string>Resume 继续训练</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="4">
+         <item row="6" column="0">
           <widget class="QLabel" name="batch_label">
            <property name="text">
-            <string>批次大小:</string>
+            <string>batch size:</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="5">
+         <item row="6" column="1">
           <widget class="QSpinBox" name="batch_spinBox">
            <property name="minimum">
             <number>1</number>
@@ -166,14 +201,14 @@
            </property>
           </widget>
          </item>
-         <item row="3" column="0">
+         <item row="7" column="0">
           <widget class="QLabel" name="imgsz_label">
            <property name="text">
-            <string>图片大小:</string>
+            <string>模型大小:</string>
            </property>
           </widget>
          </item>
-         <item row="3" column="1">
+         <item row="7" column="1">
           <widget class="QSpinBox" name="imgsz_spinBox">
            <property name="minimum">
             <number>32</number>
@@ -189,14 +224,14 @@
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
+         <item row="8" column="0">
           <widget class="QLabel" name="optimizer_label">
            <property name="text">
             <string>优化器:</string>
            </property>
           </widget>
          </item>
-         <item row="4" column="1">
+         <item row="8" column="1">
           <widget class="QComboBox" name="optimizer_cbBox">
            <item>
             <property name="text">
@@ -220,7 +255,7 @@
            </item>
           </widget>
          </item>
-         <item row="4" column="2">
+         <item row="9" column="0">
           <widget class="QCheckBox" name="amp_ckBox">
            <property name="text">
             <string>AMP 混合精度</string>
@@ -230,10 +265,17 @@
            </property>
           </widget>
          </item>
-         <item row="4" column="4">
+         <item row="9" column="1">
           <widget class="QCheckBox" name="cos_lr_ckBox">
            <property name="text">
             <string>余弦退火</string>
+           </property>
+          </widget>
+         </item>
+         <item row="10" column="0">
+          <widget class="QCheckBox" name="useRoi_ckBox">
+           <property name="text">
+            <string>使用 ROI 区域训练</string>
            </property>
           </widget>
          </item>

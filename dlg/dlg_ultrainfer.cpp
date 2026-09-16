@@ -20,6 +20,11 @@ void Ultrainfer::setProjectName(const QString &name)
     projectName_ = name;
 }
 
+void Ultrainfer::setRoiRect(const QRectF &roi)
+{
+    roiRect_ = roi;
+}
+
 void Ultrainfer::setInferModelList(const QStringList &models)
 {
     ui->inferModel_cbBox->clear();
@@ -36,10 +41,25 @@ void Ultrainfer::on_modelPath_btn_clicked()
     }
 }
 
+void Ultrainfer::on_dataYaml_btn_clicked()
+{
+    QString fileName = QFileDialog::getOpenFileName(
+        this, tr("选择数据集配置文件"), "",
+        tr("YAML 文件 (*.yaml *.yml);;所有文件 (*)"));
+    if (!fileName.isEmpty()) {
+        ui->dataYaml_lineEdit->setText(fileName);
+    }
+}
+
 void Ultrainfer::on_train_startBtn_clicked()
 {
     UltrainferTrainPara param;
     param.modelPath = ui->modelPath_lineEdit->text();
+    param.alias = ui->alias_lineEdit->text();
+    param.dataYaml = ui->dataYaml_lineEdit->text();
+    param.useRoi = ui->useRoi_ckBox->isChecked();
+    if (param.useRoi)
+        param.roiRect = roiRect_;
     param.task = ui->task_cbBox->currentText();
     param.device = ui->device_cbBox->currentText();
     param.optimizer = ui->optimizer_cbBox->currentText();
@@ -52,6 +72,9 @@ void Ultrainfer::on_train_startBtn_clicked()
 
     if (param.modelPath.isEmpty())
         return;
+
+    if (!trainParamJsonPath_.isEmpty())
+        saveToJson(trainParamJsonPath_);
 
     emit sg_train(param);
 }
@@ -117,6 +140,17 @@ void Ultrainfer::loadFromJson(const QString &jsonPath)
         Json::Value trainObj = root["train"];
         if (trainObj.isMember("modelPath"))
             ui->modelPath_lineEdit->setText(QString::fromStdString(trainObj["modelPath"].asString()));
+        if (trainObj.isMember("alias"))
+            ui->alias_lineEdit->setText(QString::fromStdString(trainObj["alias"].asString()));
+        if (trainObj.isMember("dataYaml"))
+            ui->dataYaml_lineEdit->setText(QString::fromStdString(trainObj["dataYaml"].asString()));
+        if (trainObj.isMember("useRoi"))
+            ui->useRoi_ckBox->setChecked(trainObj["useRoi"].asBool());
+        if (trainObj.isMember("roi")) {
+            Json::Value roiObj = trainObj["roi"];
+            roiRect_ = QRectF(roiObj["x"].asDouble(), roiObj["y"].asDouble(),
+                              roiObj["width"].asDouble(), roiObj["height"].asDouble());
+        }
         if (trainObj.isMember("task")) {
             int idx = ui->task_cbBox->findText(QString::fromStdString(trainObj["task"].asString()));
             if (idx >= 0) ui->task_cbBox->setCurrentIndex(idx);
@@ -164,6 +198,16 @@ void Ultrainfer::saveToJson(const QString &jsonPath)
 
     Json::Value trainObj;
     trainObj["modelPath"] = ui->modelPath_lineEdit->text().toStdString();
+    trainObj["alias"] = ui->alias_lineEdit->text().toStdString();
+    trainObj["dataYaml"] = ui->dataYaml_lineEdit->text().toStdString();
+    trainObj["useRoi"] = ui->useRoi_ckBox->isChecked();
+    Json::Value roiObj;
+    roiObj["x"] = roiRect_.x();
+    roiObj["y"] = roiRect_.y();
+    roiObj["width"] = roiRect_.width();
+    roiObj["height"] = roiRect_.height();
+    trainObj["roi"] = roiObj;
+    trainObj["port"] = 9257;
     trainObj["task"] = ui->task_cbBox->currentText().toStdString();
     trainObj["device"] = ui->device_cbBox->currentText().toStdString();
     trainObj["optimizer"] = ui->optimizer_cbBox->currentText().toStdString();

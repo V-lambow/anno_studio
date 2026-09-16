@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QFileDialog>
+#include <QRectF>
 #include <json/json.h>
 
 namespace Ui {
@@ -11,6 +12,11 @@ class Ultrainfer;
 
 struct UltrainferTrainPara {
     QString modelPath;
+    QString alias;
+    QString dataYaml;
+    bool useRoi{false};
+    QRectF roiRect;
+    int port{9257};
     QString task;
     QString device;
     QString optimizer;
@@ -49,12 +55,15 @@ public:
     ~Ultrainfer();
 
     void setProjectName(const QString &name);
+    void setRoiRect(const QRectF &roi);
+    void setTrainParamJsonPath(const QString &path) { trainParamJsonPath_ = path; }
     void setInferModelList(const QStringList &models);
     void loadFromJson(const QString &jsonPath);
     void saveToJson(const QString &jsonPath);
 
 private slots:
     void on_modelPath_btn_clicked();
+    void on_dataYaml_btn_clicked();
     void on_train_startBtn_clicked();
     void on_infer_confirmBtn_clicked();
     void on_inferModel_refreshBtn_clicked();
@@ -64,6 +73,8 @@ private slots:
 private:
     Ui::Ultrainfer *ui;
     QString projectName_;
+    QString trainParamJsonPath_;
+    QRectF roiRect_;
 
 signals:
     void sg_train(UltrainferTrainPara);

@@ -1493,7 +1493,9 @@ void MainWindow::on_actionultra_infer_triggered()
     Ultrainfer dlg;
     if (!m_curProjectPath.isEmpty()) {
         dlg.setProjectName(QFileInfo(m_curProjectPath).fileName());
+        dlg.setRoiRect(m_roiRect);
         QString jsonPath = m_curProjectPath + "/model_param.json";
+        dlg.setTrainParamJsonPath(jsonPath);
         dlg.loadFromJson(jsonPath);
     }
     connect(&dlg, &Ultrainfer::sg_train, this, &MainWindow::set_ultrainferTrainPara);
@@ -1517,20 +1519,19 @@ void MainWindow::on_actionultra_infer_triggered()
         }
     });
     dlg.exec();
-
-    if (!m_curProjectPath.isEmpty()) {
-        QString jsonPath = m_curProjectPath + "/model_param.json";
-        dlg.saveToJson(jsonPath);
-    }
 }
 
 void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
 {
     QMessageBox::information(this, "Ultralytics 训练参数",
-                             QString("模型路径: %1\n任务: %2\n设备: %3\n优化器: %4\n"
-                                     "余弦退火: %5\nEpochs: %6\nBatch: %7\nImgsz: %8\n"
-                                     "AMP: %9\nResume: %10")
+                             QString("模型路径: %1\n别名: %2\n数据集配置: %3\n使用ROI: %4\n"
+                                     "任务: %5\n设备: %6\n优化器: %7\n"
+                                     "余弦退火: %8\nEpochs: %9\nBatch: %10\nImgsz: %11\n"
+                                     "AMP: %12\nResume: %13")
                                  .arg(param.modelPath)
+                                 .arg(param.alias)
+                                 .arg(param.dataYaml)
+                                 .arg(param.useRoi ? "是" : "否")
                                  .arg(param.task)
                                  .arg(param.device)
                                  .arg(param.optimizer)
