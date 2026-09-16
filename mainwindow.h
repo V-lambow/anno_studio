@@ -46,6 +46,8 @@
 #include "dlg/dlg_labelstatistics.h"
 #include "dlg/dlg_dataset_split.h"
 #include "dlg/dlg_dataset_manager.h"
+#include "dlg/dlg_train_manager.h"
+#include "train_client.h"
 
 
 
@@ -144,6 +146,13 @@ private slots:
     void on_actionLabelStatistics_triggered();
     void on_actionCreateDataset_triggered();
     void on_actionManageDataset_triggered();
+    void on_actionTrainUltralytics_triggered();
+
+    void sl_onTrainMetrics(int row, const TrainMetrics &metrics);
+    void sl_onTrainEnd(int row, const QString &saveDir);
+    void sl_onTrainError(int row, const QString &msg);
+    void sl_onTrainPauseResume(int row, bool pause);
+    void sl_onTrainStop(int row);
     void saveLabelingData();
     void mergeOverlappingStrokes();
     void on_actionCreateRoi_triggered();
@@ -252,5 +261,19 @@ private:
     CanvasAdjustmentWidget *m_canvasAdjustment = nullptr;
     QPixmap m_originalPixmap;
     QGraphicsPixmapItem *m_pixmapItem = nullptr;
+
+    // 训练管理
+    struct ActiveTrain {
+        QString name;
+        QString alias;
+        QString outputDir;
+        int port{9257};
+        QProcess *process{nullptr};
+        TrainClient *client{nullptr};
+        int managerRow{-1};
+    };
+    QList<ActiveTrain> m_activeTrains;
+    TrainManagerDialog *m_trainMgrDlg{nullptr};
+    int m_nextTrainPort{9257};
 };
 #endif // MAINWINDOW_H

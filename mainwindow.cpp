@@ -5,6 +5,8 @@
 #include <QLabel>
 #include <QStyledItemDelegate>
 #include <QPainter>
+#include <QProcess>
+#include <QCoreApplication>
 #include "utils/include/label_exporter.h"
 
 class ColorDelegate : public QStyledItemDelegate
@@ -1523,24 +1525,188 @@ void MainWindow::on_actionultra_infer_triggered()
 
 void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
 {
-    QMessageBox::information(this, "Ultralytics 训练参数",
-                             QString("模型路径: %1\n别名: %2\n数据集配置: %3\n使用ROI: %4\n"
-                                     "任务: %5\n设备: %6\n优化器: %7\n"
-                                     "余弦退火: %8\nEpochs: %9\nBatch: %10\nImgsz: %11\n"
-                                     "AMP: %12\nResume: %13")
-                                 .arg(param.modelPath)
-                                 .arg(param.alias)
-                                 .arg(param.dataYaml)
-                                 .arg(param.useRoi ? "是" : "否")
-                                 .arg(param.task)
-                                 .arg(param.device)
-                                 .arg(param.optimizer)
-                                 .arg(param.cos_lr ? "是" : "否")
-                                 .arg(param.epochs)
-                                 .arg(param.batch)
-                                 .arg(param.imgsz)
-                                 .arg(param.amp ? "是" : "否")
-                                 .arg(param.resume ? "是" : "否"));
+    if (m_curProjectPath.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先打开项目");
+        return;
+    }
+
+    QString alias = param.alias.isEmpty() ? "train_" + QDateTime::currentDateTime().toString("MMdd_HHmmss") : param.alias;
+    QString outputDir = m_curProjectPath + "/ultralytics/runs";
+
+    // 构建 config JSON
+    Json::Value config;
+    Json::Value trainObj;
+    trainObj["modelPath"] = param.modelPath.toStdString();
+    trainObj["alias"] = alias.toStdString();
+    trainObj["dataYaml"] = param.dataYaml.toStdString();
+    trainObj["useRoi"] = param.useRoi;
+    if (param.useRoi) {
+        Json::Value roiObj;
+        roiObj["x"] = param.roiRect.x();
+        roiObj["y"] = param.roiRect.y();
+        roiObj["width"] = param.roiRect.width();
+        roiObj["height"] = param.roiRect.height();
+        trainObj["roi"] = roiObj;
+    }
+    trainObj["port"] = m_nextTrainPort;
+    trainObj["task"] = param.task.toStdString();
+    trainObj["device"] = param.device.toStdString();
+    trainObj["optimizer"] = param.optimizer.toStdString();
+    trainObj["cos_lr"] = param.cos_lr;
+    trainObj["epochs"] = param.epochs;
+    trainObj["batch"] = param.batch;
+    trainObj["imgsz"] = param.imgsz;
+    trainObj["amp"] = param.amp;
+    trainObj["resume"] = param.resume;
+    config["train"] = trainObj;
+
+    QString configPath = m_curProjectPath + "/train_config_" + alias + ".json";
+    Json::FastWriter writer;
+    std::string jsonStr = writer.write(config);
+    QFile configFile(configPath);
+    if (configFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&configFile);
+        out << QString::fromStdString(jsonStr);
+    }
+
+    // 启动 train_service.exe
+    QString exePath = QCoreApplication::applicationDirPath() + "/train_service.exe";
+    if (!QFile::exists(exePath)) {
+        QMessageBox::warning(this, "错误", "未找到 train_service.exe:\n" + exePath);
+        return;
+    }
+
+    QProcess *process = new QProcess(this);
+    process->setWorkingDirectory(QCoreApplication::applicationDirPath());
+    process->start(exePath, {"--config", configPath});
+
+    if (!process->waitForStarted(5000)) {
+        QMessageBox::warning(this, "错误", "启动 train_service.exe 失败");
+        delete process;
+        return;
+    }
+
+    int port = m_nextTrainPort;
+    m_nextTrainPort += 2;
+
+    TrainClient *client = new TrainClient(port, this);
+
+    ActiveTrain train;
+    train.name = alias;
+    train.alias = alias;
+    train.outputDir = outputDir;
+    train.port = port;
+    train.process = process;
+    train.client = client;
+    m_activeTrains.append(train);
+
+    int idx = m_activeTrains.size() - 1;
+
+    // 等待服务器就绪后发送 train 命令
+    QTimer::singleShot(1000, this, [this, idx]() {
+        if (idx < 0 || idx >= m_activeTrains.size()) return;
+        auto &t = m_activeTrains[idx];
+        Json::Value resp = t.client->sendCommand("train");
+        if (resp.get("status", "").asString() != "ok") {
+            QString errMsg = QString::fromStdString(resp.get("message", "unknown error").asString());
+            QMessageBox::warning(this, "训练启动失败", errMsg);
+        }
+    });
+
+    // 打开训练管理对话框
+    if (!m_trainMgrDlg) {
+        m_trainMgrDlg = new TrainManagerDialog(this);
+        connect(m_trainMgrDlg, &TrainManagerDialog::sg_pauseResume, this, &MainWindow::sl_onTrainPauseResume);
+        connect(m_trainMgrDlg, &TrainManagerDialog::sg_stop, this, &MainWindow::sl_onTrainStop);
+    }
+
+    int row = m_trainMgrDlg->addSession(alias, param.epochs, port, client, process);
+    m_activeTrains[idx].managerRow = row;
+
+    // 连接 TrainClient 信号（需要在 addSession 之后，因为用到 row）
+    connect(client, &TrainClient::sg_metrics, this, [this, row](const TrainMetrics &m) {
+        if (m_trainMgrDlg) m_trainMgrDlg->updateMetrics(row, m);
+    });
+    connect(client, &TrainClient::sg_trainEnd, this, [this, idx, row](const QString &saveDir) {
+        if (idx >= 0 && idx < m_activeTrains.size())
+            m_activeTrains[idx].outputDir = saveDir;
+        if (m_trainMgrDlg) m_trainMgrDlg->setSessionFinished(row);
+    });
+    connect(client, &TrainClient::sg_error, this, [this, row](const QString &msg) {
+        if (m_trainMgrDlg) m_trainMgrDlg->setSessionError(row, msg);
+    });
+
+    if (!m_trainMgrDlg->isVisible())
+        m_trainMgrDlg->show();
+}
+
+void MainWindow::sl_onTrainMetrics(int, const TrainMetrics &)
+{
+}
+
+void MainWindow::sl_onTrainEnd(int, const QString &)
+{
+}
+
+void MainWindow::sl_onTrainError(int, const QString &)
+{
+}
+
+void MainWindow::sl_onTrainPauseResume(int row, bool pause)
+{
+    for (int i = 0; i < m_activeTrains.size(); ++i) {
+        if (m_activeTrains[i].managerRow == row && m_activeTrains[i].client) {
+            QString cmd = pause ? "pause" : "holdon";
+            m_activeTrains[i].client->sendCommand(cmd);
+            break;
+        }
+    }
+}
+
+void MainWindow::sl_onTrainStop(int row)
+{
+    for (int i = 0; i < m_activeTrains.size(); ++i) {
+        if (m_activeTrains[i].managerRow == row && m_activeTrains[i].client) {
+            m_activeTrains[i].client->sendCommand("stop");
+
+            // 删除训练输出目录
+            QString alias = m_activeTrains[i].alias;
+            QString outDir = m_activeTrains[i].outputDir + "/" + alias;
+            if (QDir(outDir).exists()) {
+                QDir(outDir).removeRecursively();
+            }
+
+            // 清理进程和客户端
+            if (m_activeTrains[i].process) {
+                m_activeTrains[i].process->kill();
+                m_activeTrains[i].process->waitForFinished(3000);
+            }
+            delete m_activeTrains[i].client;
+            m_activeTrains[i].client = nullptr;
+
+            if (m_trainMgrDlg)
+                m_trainMgrDlg->setSessionFinished(row);
+
+            // 删除 config 文件
+            QString configPath = m_curProjectPath + "/train_config_" + alias + ".json";
+            if (QFile::exists(configPath))
+                QFile::remove(configPath);
+
+            break;
+        }
+    }
+}
+
+void MainWindow::on_actionTrainUltralytics_triggered()
+{
+    if (!m_trainMgrDlg) {
+        m_trainMgrDlg = new TrainManagerDialog(this);
+        connect(m_trainMgrDlg, &TrainManagerDialog::sg_pauseResume, this, &MainWindow::sl_onTrainPauseResume);
+        connect(m_trainMgrDlg, &TrainManagerDialog::sg_stop, this, &MainWindow::sl_onTrainStop);
+    }
+    m_trainMgrDlg->show();
+    m_trainMgrDlg->raise();
+    m_trainMgrDlg->activateWindow();
 }
 
 void MainWindow::set_ultrainferInferPara(UltrainferInferPara param)

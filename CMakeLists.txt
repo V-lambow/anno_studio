@@ -12,6 +12,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(ZeroMQ CONFIG REQUIRED)
+find_package(cppzmq CONFIG REQUIRED)
 
 set(TS_FILES AnnoStudio_zh_CN.ts)
 
@@ -45,6 +47,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         dlg/dlg_labelstatistics.h dlg/dlg_labelstatistics.cpp
         dlg/dlg_dataset_split.h dlg/dlg_dataset_split.cpp
         dlg/dlg_dataset_manager.h dlg/dlg_dataset_manager.cpp
+        dlg/dlg_train_manager.h dlg/dlg_train_manager.cpp
+        utils/include/train_client.h utils/src/train_client.cpp
         halcon/lib/halconcpp.lib
         halcon/lib/halcon.lib
         halcon/lib/halconc.lib
@@ -96,7 +100,8 @@ if(WIN32)
     target_link_libraries(AnnoStudio PRIVATE delayimp.lib)
 endif()
   target_link_libraries(AnnoStudio PRIVATE JsonCpp::JsonCpp)
-target_link_libraries(AnnoStudio PRIVATE Qt6::Core)
+  target_link_libraries(AnnoStudio PRIVATE Qt6::Core)
+  target_link_libraries(AnnoStudio PRIVATE libzmq cppzmq)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
