@@ -3077,6 +3077,17 @@ void MainWindow::on_actionCreateDataset_triggered()
     dlg.exec();
 }
 
+void MainWindow::on_actionManageDataset_triggered()
+{
+    if (m_curProjectPath.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先打开项目");
+        return;
+    }
+
+    DatasetManagerDialog dlg(m_curProjectPath, this);
+    dlg.exec();
+}
+
 QList<MainWindow::ImageInfo> MainWindow::analyzeTrainImages(const QString &imageDir)
 {
     QList<ImageInfo> result;

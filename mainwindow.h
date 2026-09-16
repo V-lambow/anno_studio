@@ -45,6 +45,7 @@
 #include "MyGraphics/canvasadjustmentwidget.h"
 #include "dlg/dlg_labelstatistics.h"
 #include "dlg/dlg_dataset_split.h"
+#include "dlg/dlg_dataset_manager.h"
 
 
 
@@ -142,6 +143,7 @@ private slots:
     void on_actionShortcuts_triggered();
     void on_actionLabelStatistics_triggered();
     void on_actionCreateDataset_triggered();
+    void on_actionManageDataset_triggered();
     void saveLabelingData();
     void mergeOverlappingStrokes();
     void on_actionCreateRoi_triggered();

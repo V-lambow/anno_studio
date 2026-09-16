@@ -44,6 +44,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         dlg/dlg_ultrainfer.ui dlg/dlg_ultrainfer.h dlg/dlg_ultrainfer.cpp
         dlg/dlg_labelstatistics.h dlg/dlg_labelstatistics.cpp
         dlg/dlg_dataset_split.h dlg/dlg_dataset_split.cpp
+        dlg/dlg_dataset_manager.h dlg/dlg_dataset_manager.cpp
         halcon/lib/halconcpp.lib
         halcon/lib/halcon.lib
         halcon/lib/halconc.lib
