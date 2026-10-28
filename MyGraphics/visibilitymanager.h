@@ -10,6 +10,7 @@ public:
 
     void setInferPatternVisible(bool visible);
     void setPaintedItemVisible(bool visible);
+    void setRectItemVisible(bool visible);
 
 private:
     QGraphicsScene *m_scene;

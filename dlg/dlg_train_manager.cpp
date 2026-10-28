@@ -9,17 +9,19 @@ TrainManagerDialog::TrainManagerDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle("训练管理");
-    setMinimumSize(700, 350);
+    setMinimumSize(1100, 350);
 
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(5);
-    m_table->setHorizontalHeaderLabels({"训练名", "进度", "Loss", "mAP50", "操作"});
+    m_table->setColumnCount(10);
+    m_table->setHorizontalHeaderLabels({
+        "训练名", "进度", "Loss", "BoxLoss", "ClsLoss", "DFLLoss",
+        "Precision", "Recall", "mAP50", "操作"
+    });
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
-    m_table->horizontalHeader()->resizeSection(4, 180);
+    for (int i = 1; i < 9; ++i)
+        m_table->horizontalHeader()->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+    m_table->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Fixed);
+    m_table->horizontalHeader()->resizeSection(9, 180);
     m_table->verticalHeader()->setVisible(false);
     m_table->setSelectionBehavior(QTableWidget::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -56,9 +58,29 @@ int TrainManagerDialog::addSession(const QString &name, int totalEpochs, int por
     lossLabel->setAlignment(Qt::AlignCenter);
     m_table->setCellWidget(row, 2, lossLabel);
 
+    auto *boxLossLabel = new QLabel("--", this);
+    boxLossLabel->setAlignment(Qt::AlignCenter);
+    m_table->setCellWidget(row, 3, boxLossLabel);
+
+    auto *clsLossLabel = new QLabel("--", this);
+    clsLossLabel->setAlignment(Qt::AlignCenter);
+    m_table->setCellWidget(row, 4, clsLossLabel);
+
+    auto *dflLossLabel = new QLabel("--", this);
+    dflLossLabel->setAlignment(Qt::AlignCenter);
+    m_table->setCellWidget(row, 5, dflLossLabel);
+
+    auto *precLabel = new QLabel("--", this);
+    precLabel->setAlignment(Qt::AlignCenter);
+    m_table->setCellWidget(row, 6, precLabel);
+
+    auto *recallLabel = new QLabel("--", this);
+    recallLabel->setAlignment(Qt::AlignCenter);
+    m_table->setCellWidget(row, 7, recallLabel);
+
     auto *mapLabel = new QLabel("--", this);
     mapLabel->setAlignment(Qt::AlignCenter);
-    m_table->setCellWidget(row, 3, mapLabel);
+    m_table->setCellWidget(row, 8, mapLabel);
 
     auto *opWidget = new QWidget(this);
     auto *opLayout = new QHBoxLayout(opWidget);
@@ -74,7 +96,7 @@ int TrainManagerDialog::addSession(const QString &name, int totalEpochs, int por
 
     opLayout->addWidget(pauseBtn);
     opLayout->addWidget(stopBtn);
-    m_table->setCellWidget(row, 4, opWidget);
+    m_table->setCellWidget(row, 9, opWidget);
 
     connect(pauseBtn, &QPushButton::clicked, this, &TrainManagerDialog::onPauseResumeClicked);
     connect(stopBtn, &QPushButton::clicked, this, &TrainManagerDialog::onStopClicked);
@@ -89,7 +111,13 @@ void TrainManagerDialog::updateMetrics(int row, const TrainMetrics &metrics)
     auto &s = m_sessions[row];
     s.currentEpoch = metrics.epoch;
     s.loss = metrics.loss;
+    s.boxLoss = metrics.boxLoss;
+    s.clsLoss = metrics.clsLoss;
+    s.dflLoss = metrics.dflLoss;
+    s.precision = metrics.precision;
+    s.recall = metrics.recall;
     s.mAP50 = metrics.mAP50;
+    s.mAP50_95 = metrics.mAP50_95;
 
     auto *progressBar = qobject_cast<QProgressBar*>(m_table->cellWidget(row, 1));
     if (progressBar) {
@@ -101,7 +129,27 @@ void TrainManagerDialog::updateMetrics(int row, const TrainMetrics &metrics)
     if (lossLabel)
         lossLabel->setText(QString::number(metrics.loss, 'f', 4));
 
-    auto *mapLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 3));
+    auto *boxLossLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 3));
+    if (boxLossLabel)
+        boxLossLabel->setText(QString::number(metrics.boxLoss, 'f', 4));
+
+    auto *clsLossLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 4));
+    if (clsLossLabel)
+        clsLossLabel->setText(QString::number(metrics.clsLoss, 'f', 4));
+
+    auto *dflLossLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 5));
+    if (dflLossLabel)
+        dflLossLabel->setText(QString::number(metrics.dflLoss, 'f', 4));
+
+    auto *precLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 6));
+    if (precLabel)
+        precLabel->setText(QString::number(metrics.precision, 'f', 4));
+
+    auto *recallLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 7));
+    if (recallLabel)
+        recallLabel->setText(QString::number(metrics.recall, 'f', 4));
+
+    auto *mapLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 8));
     if (mapLabel)
         mapLabel->setText(QString::number(metrics.mAP50, 'f', 4));
 }
@@ -116,7 +164,7 @@ void TrainManagerDialog::setSessionFinished(int row)
         progressBar->setStyleSheet("QProgressBar::chunk { background-color: #4CAF50; }");
     }
 
-    auto *opWidget = m_table->cellWidget(row, 4);
+    auto *opWidget = m_table->cellWidget(row, 9);
     if (opWidget) {
         auto *pauseBtn = opWidget->findChild<QPushButton*>("pauseBtn");
         auto *stopBtn = opWidget->findChild<QPushButton*>("stopBtn");
@@ -139,7 +187,7 @@ void TrainManagerDialog::setSessionError(int row, const QString &msg)
     if (lossLabel)
         lossLabel->setText("ERROR");
 
-    auto *opWidget = m_table->cellWidget(row, 4);
+    auto *opWidget = m_table->cellWidget(row, 9);
     if (opWidget) {
         auto *pauseBtn = opWidget->findChild<QPushButton*>("pauseBtn");
         auto *stopBtn = opWidget->findChild<QPushButton*>("stopBtn");
@@ -155,7 +203,7 @@ void TrainManagerDialog::onPauseResumeClicked()
 
     int row = -1;
     for (int i = 0; i < m_table->rowCount(); ++i) {
-        auto *opWidget = m_table->cellWidget(i, 4);
+        auto *opWidget = m_table->cellWidget(i, 9);
         if (opWidget && opWidget->findChild<QPushButton*>("pauseBtn") == btn) {
             row = i;
             break;
@@ -178,7 +226,7 @@ void TrainManagerDialog::onStopClicked()
 
     int row = -1;
     for (int i = 0; i < m_table->rowCount(); ++i) {
-        auto *opWidget = m_table->cellWidget(i, 4);
+        auto *opWidget = m_table->cellWidget(i, 9);
         if (opWidget && opWidget->findChild<QPushButton*>("stopBtn") == btn) {
             row = i;
             break;

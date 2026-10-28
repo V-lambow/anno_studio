@@ -2,9 +2,12 @@
 #define TRAIN_CLIENT_H
 
 #include <QObject>
+#include <QThread>
 #include <QTimer>
 #include <zmq.hpp>
 #include <json/json.h>
+
+Q_DECLARE_METATYPE(Json::Value)
 
 struct TrainMetrics {
     int epoch{0};
@@ -19,17 +22,20 @@ struct TrainMetrics {
     double mAP50_95{0};
 };
 
-class TrainClient : public QObject
+class TrainClientWorker : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit TrainClient(int port = 9257, QObject *parent = nullptr);
-    ~TrainClient();
+    explicit TrainClientWorker(int port, QObject *parent = nullptr);
+    ~TrainClientWorker();
 
-    Json::Value sendCommand(const QString &cmd);
+public slots:
+    void start();
+    void sl_sendCommand(const QString &cmd);
 
 signals:
+    void sg_commandResult(const Json::Value &result);
     void sg_metrics(const TrainMetrics &metrics);
     void sg_trainEnd(const QString &saveDir);
     void sg_error(const QString &message);
@@ -43,6 +49,29 @@ private:
     zmq::socket_t m_req;
     zmq::socket_t m_sub;
     QTimer m_pollTimer;
+};
+
+class TrainClient : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit TrainClient(int port = 9257, QObject *parent = nullptr);
+    ~TrainClient();
+
+    void sendCommand(const QString &cmd);
+
+signals:
+    void sg_commandResult(const Json::Value &result);
+    void sg_metrics(const TrainMetrics &metrics);
+    void sg_trainEnd(const QString &saveDir);
+    void sg_error(const QString &message);
+    void sg_sendCommand(const QString &cmd);
+    void sg_startWorker();
+
+private:
+    QThread m_thread;
+    TrainClientWorker *m_worker;
 };
 
 #endif // TRAIN_CLIENT_H

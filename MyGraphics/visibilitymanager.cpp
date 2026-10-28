@@ -3,6 +3,7 @@
 #include <QGraphicsItem>
 #include "inferpattern.h"
 #include "painteditem.h"
+#include "rectitem.h"
 
 VisibilityManager::VisibilityManager(QGraphicsScene *scene)
     : m_scene(scene)
@@ -30,5 +31,17 @@ void VisibilityManager::setPaintedItemVisible(bool visible)
         PaintedItem *pattern = dynamic_cast<PaintedItem *>(item);
         if (pattern)
             pattern->setVisible(visible);
+    }
+}
+
+void VisibilityManager::setRectItemVisible(bool visible)
+{
+    if (!m_scene) return;
+    const auto &items = m_scene->items();
+    for (QGraphicsItem *item : items)
+    {
+        RectItem *rect = dynamic_cast<RectItem *>(item);
+        if (rect)
+            rect->setVisible(visible);
     }
 }

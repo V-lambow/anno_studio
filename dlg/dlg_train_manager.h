@@ -19,7 +19,13 @@ public:
         int totalEpochs{0};
         int currentEpoch{0};
         double loss{0};
+        double boxLoss{0};
+        double clsLoss{0};
+        double dflLoss{0};
+        double precision{0};
+        double recall{0};
         double mAP50{0};
+        double mAP50_95{0};
         bool paused{false};
         bool running{true};
         TrainClient *client{nullptr};

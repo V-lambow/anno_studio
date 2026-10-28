@@ -416,12 +416,15 @@ void MyGraphicsView::restoreUndo()
     m_rectItems.clear();
 
     m_strokeItems = snap.strokes;
-    for (auto *s : m_strokeItems)
+    for (auto *s : m_strokeItems) {
+        s->setVisible(m_drawEffectEnabled);
         scene()->addItem(s);
+    }
 
     m_rectItems = snap.rects;
     for (auto *r : m_rectItems) {
         r->setOnModified([this]() { emit sg_itemModified(); });
+        r->setVisible(m_drawEffectEnabled);
         scene()->addItem(r);
     }
 
