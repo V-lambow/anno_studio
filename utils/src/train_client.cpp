@@ -14,7 +14,10 @@ TrainClientWorker::TrainClientWorker(int port, QObject *parent)
 
 TrainClientWorker::~TrainClientWorker()
 {
-    m_pollTimer.stop();
+    if (m_pollTimer) {
+        m_pollTimer->stop();
+        delete m_pollTimer;
+    }
     m_req.close();
     m_sub.close();
     m_ctx.close();
@@ -22,20 +25,27 @@ TrainClientWorker::~TrainClientWorker()
 
 void TrainClientWorker::start()
 {
-    m_pollTimer.moveToThread(QThread::currentThread());
+    m_pollTimer = new QTimer();
+    m_pollTimer->setInterval(2000);
+    connect(m_pollTimer, &QTimer::timeout, this, &TrainClientWorker::pollSubscription);
+    m_pollTimer->start();
+
+    setupReqSocket();
 
     int linger = 0;
-    m_req.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-    m_req.connect("tcp://localhost:" + std::to_string(m_port + 1));
-
     m_sub.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     m_sub.connect("tcp://localhost:" + std::to_string(m_port));
     const char *sub_filter = "";
     m_sub.setsockopt(ZMQ_SUBSCRIBE, sub_filter, strlen(sub_filter));
+}
 
-    m_pollTimer.setInterval(2000);
-    connect(&m_pollTimer, &QTimer::timeout, this, &TrainClientWorker::pollSubscription);
-    m_pollTimer.start();
+void TrainClientWorker::setupReqSocket()
+{
+    int linger = 0;
+    m_req.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    int rcvTimeout = 3000;
+    m_req.setsockopt(ZMQ_RCVTIMEO, &rcvTimeout, sizeof(rcvTimeout));
+    m_req.connect("tcp://localhost:" + std::to_string(m_port + 1));
 }
 
 void TrainClientWorker::sl_sendCommand(const QString &cmd)
@@ -56,6 +66,10 @@ void TrainClientWorker::sl_sendCommand(const QString &cmd)
             err["status"] = "error";
             err["message"] = "No response from server";
             emit sg_commandResult(err);
+
+            m_req.close();
+            m_req = zmq::socket_t(m_ctx, zmq::socket_type::req);
+            setupReqSocket();
             return;
         }
 
@@ -69,6 +83,12 @@ void TrainClientWorker::sl_sendCommand(const QString &cmd)
         err["status"] = "error";
         err["message"] = e.what();
         emit sg_commandResult(err);
+
+        try {
+            m_req.close();
+            m_req = zmq::socket_t(m_ctx, zmq::socket_type::req);
+            setupReqSocket();
+        } catch (const zmq::error_t &) {}
     }
 }
 

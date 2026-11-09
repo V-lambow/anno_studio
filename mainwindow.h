@@ -271,6 +271,7 @@ private:
         QProcess *process{nullptr};
         TrainClient *client{nullptr};
         int managerRow{-1};
+        bool cleaned{false};
     };
     QList<ActiveTrain> m_activeTrains;
     TrainManagerDialog *m_trainMgrDlg{nullptr};

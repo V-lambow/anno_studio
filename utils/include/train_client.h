@@ -48,7 +48,9 @@ private:
     zmq::context_t m_ctx;
     zmq::socket_t m_req;
     zmq::socket_t m_sub;
-    QTimer m_pollTimer;
+    QTimer *m_pollTimer{nullptr};
+
+    void setupReqSocket();
 };
 
 class TrainClient : public QObject

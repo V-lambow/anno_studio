@@ -181,11 +181,15 @@ void TrainManagerDialog::setSessionError(int row, const QString &msg)
     auto *progressBar = qobject_cast<QProgressBar*>(m_table->cellWidget(row, 1));
     if (progressBar) {
         progressBar->setStyleSheet("QProgressBar::chunk { background-color: #f44336; }");
+        progressBar->setFormat("ERROR");
+        progressBar->setToolTip(msg);
     }
 
     auto *lossLabel = qobject_cast<QLabel*>(m_table->cellWidget(row, 2));
-    if (lossLabel)
+    if (lossLabel) {
         lossLabel->setText("ERROR");
+        lossLabel->setToolTip(msg);
+    }
 
     auto *opWidget = m_table->cellWidget(row, 9);
     if (opWidget) {
@@ -194,6 +198,9 @@ void TrainManagerDialog::setSessionError(int row, const QString &msg)
         if (pauseBtn) pauseBtn->setEnabled(false);
         if (stopBtn) stopBtn->setEnabled(false);
     }
+
+    QMessageBox::warning(this, "训练错误",
+        QString("训练 \"%1\" 发生错误：\n%2").arg(m_sessions[row].name, msg));
 }
 
 void TrainManagerDialog::onPauseResumeClicked()
