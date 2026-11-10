@@ -6,3 +6,5 @@
 /saige/
 /resource/
 *.dll
+*.pt
+./CMakeLists.txt.user
