@@ -6,5 +6,9 @@
 /saige/
 /resource/
 *.dll
+<<<<<<< HEAD
 *.pt
 ./CMakeLists.txt.user
+=======
+*.pt
+>>>>>>> origin/HEAD
