@@ -21,7 +21,7 @@ TrainManagerDialog::TrainManagerDialog(QWidget *parent)
     for (int i = 1; i < 9; ++i)
         m_table->horizontalHeader()->setSectionResizeMode(i, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Fixed);
-    m_table->horizontalHeader()->resizeSection(9, 180);
+    m_table->horizontalHeader()->resizeSection(9, 100);
     m_table->verticalHeader()->setVisible(false);
     m_table->setSelectionBehavior(QTableWidget::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -30,7 +30,7 @@ TrainManagerDialog::TrainManagerDialog(QWidget *parent)
     mainLayout->addWidget(m_table);
 }
 
-int TrainManagerDialog::addSession(const QString &name, int totalEpochs, int port,
+int TrainManagerDialog::addSession(const QString &name, int totalEpochs,
                                    TrainClient *client, QProcess *process)
 {
     int row = m_table->rowCount();
@@ -39,7 +39,6 @@ int TrainManagerDialog::addSession(const QString &name, int totalEpochs, int por
     TrainSession session;
     session.name = name;
     session.totalEpochs = totalEpochs;
-    session.port = port;
     session.client = client;
     session.process = process;
     m_sessions.append(session);
@@ -87,18 +86,13 @@ int TrainManagerDialog::addSession(const QString &name, int totalEpochs, int por
     opLayout->setContentsMargins(4, 2, 4, 2);
     opLayout->setSpacing(6);
 
-    auto *pauseBtn = new QPushButton("暂停", this);
-    pauseBtn->setObjectName("pauseBtn");
-    pauseBtn->setFixedWidth(70);
     auto *stopBtn = new QPushButton("停止", this);
     stopBtn->setObjectName("stopBtn");
     stopBtn->setFixedWidth(70);
 
-    opLayout->addWidget(pauseBtn);
     opLayout->addWidget(stopBtn);
     m_table->setCellWidget(row, 9, opWidget);
 
-    connect(pauseBtn, &QPushButton::clicked, this, &TrainManagerDialog::onPauseResumeClicked);
     connect(stopBtn, &QPushButton::clicked, this, &TrainManagerDialog::onStopClicked);
 
     return row;
@@ -166,9 +160,7 @@ void TrainManagerDialog::setSessionFinished(int row)
 
     auto *opWidget = m_table->cellWidget(row, 9);
     if (opWidget) {
-        auto *pauseBtn = opWidget->findChild<QPushButton*>("pauseBtn");
         auto *stopBtn = opWidget->findChild<QPushButton*>("stopBtn");
-        if (pauseBtn) pauseBtn->setEnabled(false);
         if (stopBtn) stopBtn->setText("已删除");
     }
 }
@@ -193,37 +185,12 @@ void TrainManagerDialog::setSessionError(int row, const QString &msg)
 
     auto *opWidget = m_table->cellWidget(row, 9);
     if (opWidget) {
-        auto *pauseBtn = opWidget->findChild<QPushButton*>("pauseBtn");
         auto *stopBtn = opWidget->findChild<QPushButton*>("stopBtn");
-        if (pauseBtn) pauseBtn->setEnabled(false);
         if (stopBtn) stopBtn->setEnabled(false);
     }
 
     QMessageBox::warning(this, "训练错误",
         QString("训练 \"%1\" 发生错误：\n%2").arg(m_sessions[row].name, msg));
-}
-
-void TrainManagerDialog::onPauseResumeClicked()
-{
-    QPushButton *btn = qobject_cast<QPushButton*>(sender());
-    if (!btn) return;
-
-    int row = -1;
-    for (int i = 0; i < m_table->rowCount(); ++i) {
-        auto *opWidget = m_table->cellWidget(i, 9);
-        if (opWidget && opWidget->findChild<QPushButton*>("pauseBtn") == btn) {
-            row = i;
-            break;
-        }
-    }
-    if (row < 0 || row >= m_sessions.size()) return;
-
-    auto &s = m_sessions[row];
-    if (!s.running) return;
-
-    s.paused = !s.paused;
-    btn->setText(s.paused ? "继续" : "暂停");
-    emit sg_pauseResume(row, s.paused);
 }
 
 void TrainManagerDialog::onStopClicked()

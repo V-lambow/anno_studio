@@ -26,27 +26,23 @@ public:
         double recall{0};
         double mAP50{0};
         double mAP50_95{0};
-        bool paused{false};
         bool running{true};
         TrainClient *client{nullptr};
-        int port{9257};
         QProcess *process{nullptr};
     };
 
     explicit TrainManagerDialog(QWidget *parent = nullptr);
 
-    int addSession(const QString &name, int totalEpochs, int port,
+    int addSession(const QString &name, int totalEpochs,
                    TrainClient *client, QProcess *process);
     void updateMetrics(int row, const TrainMetrics &metrics);
     void setSessionFinished(int row);
     void setSessionError(int row, const QString &msg);
 
 signals:
-    void sg_pauseResume(int row, bool pause);
     void sg_stop(int row);
 
 private slots:
-    void onPauseResumeClicked();
     void onStopClicked();
 
 private:

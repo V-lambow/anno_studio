@@ -12,8 +12,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools)
 find_package(jsoncpp CONFIG REQUIRED)
-find_package(ZeroMQ CONFIG REQUIRED)
-find_package(cppzmq CONFIG REQUIRED)
 
 set(TS_FILES AnnoStudio_zh_CN.ts)
 
@@ -101,7 +99,23 @@ if(WIN32)
 endif()
   target_link_libraries(AnnoStudio PRIVATE JsonCpp::JsonCpp)
   target_link_libraries(AnnoStudio PRIVATE Qt6::Core)
-  target_link_libraries(AnnoStudio PRIVATE libzmq cppzmq)
+
+# 训练子进程服务（PyInstaller onedir，约 5.8GB，torch CUDA 版）
+# 源目录可用 -DTRAIN_JSON_SERVICE_DIR=... 覆盖
+set(TRAIN_JSON_SERVICE_DIR "E:/m_code/ultralytics-main/train-JSONservice/dist/train_json_service"
+    CACHE PATH "Path to the train_json_service onedir build")
+
+if(EXISTS "${TRAIN_JSON_SERVICE_DIR}/train_json_service.exe")
+    add_custom_command(TARGET AnnoStudio POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            "-DSRC=${TRAIN_JSON_SERVICE_DIR}"
+            "-DDST=$<TARGET_FILE_DIR:AnnoStudio>"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_train_service.cmake
+        COMMENT "Syncing train_json_service into output directory"
+    )
+else()
+    message(WARNING "train_json_service.exe not found under: ${TRAIN_JSON_SERVICE_DIR}")
+endif()
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

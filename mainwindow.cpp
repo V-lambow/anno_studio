@@ -1496,10 +1496,10 @@ void MainWindow::on_actionultra_infer_triggered()
     Ultrainfer dlg;
     if (!m_curProjectPath.isEmpty()) {
         dlg.setProjectName(QFileInfo(m_curProjectPath).fileName());
-        dlg.setRoiRect(m_roiRect);
         QString jsonPath = m_curProjectPath + "/model_param.json";
         dlg.setTrainParamJsonPath(jsonPath);
         dlg.loadFromJson(jsonPath);
+        dlg.setRoiRect(m_roiRect);
     }
     connect(&dlg, &Ultrainfer::sg_train, this, [&dlg](const UltrainferTrainPara &) {
         dlg.accept();
@@ -1528,6 +1528,21 @@ void MainWindow::on_actionultra_infer_triggered()
     dlg.exec();
 }
 
+// 训练跑在 exe 的子进程里，QProcess::kill() 在 Windows 上是 TerminateProcess，
+// 只杀一层会把训练进程晾在后台继续占 GPU，必须用 taskkill /T 杀整棵树。
+static void killProcessTree(QProcess *process)
+{
+    if (!process || process->state() == QProcess::NotRunning)
+        return;
+
+    const qint64 pid = process->processId();
+    if (pid > 0)
+        QProcess::execute("taskkill", {"/F", "/T", "/PID", QString::number(pid)});
+
+    if (!process->waitForFinished(3000))
+        process->kill();
+}
+
 void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
 {
     if (m_curProjectPath.isEmpty()) {
@@ -1536,7 +1551,7 @@ void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
     }
 
     QString alias = param.alias.isEmpty() ? "train_" + QDateTime::currentDateTime().toString("MMdd_HHmmss") : param.alias;
-    QString outputDir = m_curProjectPath + "/ultralytics/runs";
+    QString outputDir = m_curProjectPath + "/ultralytics/runs/" + param.task;
 
     // 构建 config JSON
     Json::Value config;
@@ -1544,6 +1559,8 @@ void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
     trainObj["modelPath"] = param.modelPath.toStdString();
     trainObj["alias"] = alias.toStdString();
     trainObj["dataYaml"] = param.dataYaml.toStdString();
+    trainObj["project"] = outputDir.toStdString();
+    trainObj["exist_ok"] = true;
     trainObj["useRoi"] = param.useRoi;
     if (param.useRoi) {
         Json::Value roiObj;
@@ -1553,7 +1570,6 @@ void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
         roiObj["height"] = param.roiRect.height();
         trainObj["roi"] = roiObj;
     }
-    trainObj["port"] = m_nextTrainPort;
     trainObj["task"] = param.task.toStdString();
     trainObj["device"] = param.device.toStdString();
     trainObj["optimizer"] = param.optimizer.toStdString();
@@ -1574,10 +1590,10 @@ void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
         out << QString::fromStdString(jsonStr);
     }
 
-    // 启动 train_service.exe
-    QString exePath = QCoreApplication::applicationDirPath() + "/train_service.exe";
+    // 启动 train_json_service.exe（启动即训练，没有命令通道）
+    QString exePath = QCoreApplication::applicationDirPath() + "/train_json_service.exe";
     if (!QFile::exists(exePath)) {
-        QMessageBox::warning(this, "错误", "未找到 train_service.exe:\n" + exePath);
+        QMessageBox::warning(this, "错误", "未找到 train_json_service.exe:\n" + exePath);
         return;
     }
 
@@ -1588,148 +1604,82 @@ void MainWindow::set_ultrainferTrainPara(UltrainferTrainPara param)
     connect(process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
         QString errMsg;
         switch (err) {
-        case QProcess::FailedToStart: errMsg = "train_service.exe 启动失败，文件不存在或无权限"; break;
-        case QProcess::Crashed: errMsg = "train_service.exe 崩溃"; break;
-        case QProcess::Timedout: errMsg = "train_service.exe 超时"; break;
-        case QProcess::WriteError: errMsg = "写入 train_service.exe 失败"; break;
-        case QProcess::ReadError: errMsg = "读取 train_service.exe 输出失败"; break;
-        default: errMsg = "train_service.exe 未知错误"; break;
+        case QProcess::FailedToStart: errMsg = "train_json_service.exe 启动失败，文件不存在或无权限"; break;
+        case QProcess::Crashed: errMsg = "train_json_service.exe 崩溃"; break;
+        case QProcess::Timedout: errMsg = "train_json_service.exe 超时"; break;
+        case QProcess::WriteError: errMsg = "写入 train_json_service.exe 失败"; break;
+        case QProcess::ReadError: errMsg = "读取 train_json_service.exe 输出失败"; break;
+        default: errMsg = "train_json_service.exe 未知错误"; break;
         }
         QMessageBox::warning(this, "训练服务错误", errMsg);
     });
 
+    TrainClient *client = new TrainClient(this);
+    client->attachProcess(process);
+
     process->start(exePath, {"--config", configPath});
-    qDebug() << "启动微服务:" << exePath << '\n' << "配置路径:" << configPath;
+    qDebug() << "启动训练服务:" << exePath << '\n' << "配置路径:" << configPath;
 
     if (!process->waitForStarted(5000)) {
         QString detail = QString::fromLocal8Bit(process->readAllStandardOutput());
         QMessageBox::warning(this, "错误",
-            "启动 train_service.exe 失败\n路径: " + exePath + "\n" + detail);
+            "启动 train_json_service.exe 失败\n路径: " + exePath + "\n" + detail);
         process->deleteLater();
         return;
     }
-
-    int port = m_nextTrainPort;
-    m_nextTrainPort += 2;
-
-    TrainClient *client = new TrainClient(port, this);
 
     ActiveTrain train;
     train.name = alias;
     train.alias = alias;
     train.outputDir = outputDir;
-    train.port = port;
     train.process = process;
     train.client = client;
     m_activeTrains.append(train);
 
     int idx = m_activeTrains.size() - 1;
 
-    // 等待服务器就绪后再发送 train 命令（探活轮询代替盲等）
-    struct ProbeState {
-        int retryCount{0};
-        bool done{false};
-    };
-    auto state = QSharedPointer<ProbeState>::create();
-
-    auto *probeTimer = new QTimer(this);
-    probeTimer->setInterval(500);
-    const int kMaxRetries = 40;  // 500ms * 40 = 20s 超时
-
-    QObject::connect(probeTimer, &QTimer::timeout, this,
-        [this, client, probeTimer, state, kMaxRetries]() {
-            if (state->done) return;
-
-            state->retryCount++;
-            if (state->retryCount > kMaxRetries) {
-                state->done = true;
-                probeTimer->stop();
-                probeTimer->deleteLater();
-                QMessageBox::warning(this, "训练启动超时",
-                    "训练服务启动超时，请检查 train_service.exe 是否正常运行");
-                return;
-            }
-
-            auto *conn = new QMetaObject::Connection;
-            *conn = QObject::connect(client, &TrainClient::sg_commandResult, this,
-                [this, client, probeTimer, state, conn](const Json::Value &resp) {
-                    QObject::disconnect(*conn);
-                    delete conn;
-
-                    if (state->done) return;
-                    if (resp.get("status", "").asString() != "ok") return;
-
-                    state->done = true;
-                    probeTimer->stop();
-                    probeTimer->deleteLater();
-
-                    // 服务就绪，发送 train 并监听结果
-                    auto *trainConn = new QMetaObject::Connection;
-                    *trainConn = QObject::connect(client, &TrainClient::sg_commandResult, this,
-                        [this, trainConn](const Json::Value &trainResp) {
-                            QObject::disconnect(*trainConn);
-                            delete trainConn;
-                            if (trainResp.get("status", "").asString() != "ok") {
-                                QString errMsg = QString::fromStdString(
-                                    trainResp.get("message", "unknown error").asString());
-                                QMessageBox::warning(this, "训练启动失败", errMsg);
-                            }
-                        });
-                    client->sendCommand("train");
-                });
-            client->sendCommand("status");
-        });
-    probeTimer->start();
-
     // 打开训练管理对话框
     if (!m_trainMgrDlg) {
         m_trainMgrDlg = new TrainManagerDialog(this);
-        connect(m_trainMgrDlg, &TrainManagerDialog::sg_pauseResume, this, &MainWindow::sl_onTrainPauseResume);
         connect(m_trainMgrDlg, &TrainManagerDialog::sg_stop, this, &MainWindow::sl_onTrainStop);
     }
 
-    int row = m_trainMgrDlg->addSession(alias, param.epochs, port, client, process);
+    int row = m_trainMgrDlg->addSession(alias, param.epochs, client, process);
     m_activeTrains[idx].managerRow = row;
 
     // 连接 TrainClient 信号（需要在 addSession 之后，因为用到 row）
     connect(client, &TrainClient::sg_metrics, this, [this, row](const TrainMetrics &m) {
         if (m_trainMgrDlg) m_trainMgrDlg->updateMetrics(row, m);
     });
-    connect(client, &TrainClient::sg_trainEnd, this, [this, idx, row](const QString &saveDir) {
-        if (idx < 0 || idx >= m_activeTrains.size() || m_activeTrains[idx].cleaned) return;
-        m_activeTrains[idx].cleaned = true;
-        if (m_activeTrains[idx].client)
-            m_activeTrains[idx].outputDir = saveDir;
-        if (m_trainMgrDlg) m_trainMgrDlg->setSessionFinished(row);
-
+    // 终态事件先于 service_state.json 落盘到达 stdout，必须等 exe 自然退出再回收，
+    // 否则立刻 kill 会截断状态文件，下次 --status / --resume 就读不到 save_dir。
+    auto settleProcess = [this, idx]() {
         QProcess *proc = m_activeTrains[idx].process;
-        if (proc) {
-            proc->disconnect();
+        if (!proc) return;
+        proc->disconnect();
+        if (proc->state() != QProcess::NotRunning && !proc->waitForFinished(3000))
             proc->kill();
-            proc->waitForFinished(3000);
-            proc->deleteLater();
-            m_activeTrains[idx].process = nullptr;
-        }
+        proc->deleteLater();
+        m_activeTrains[idx].process = nullptr;
+
         TrainClient *c = m_activeTrains[idx].client;
         m_activeTrains[idx].client = nullptr;
-        QTimer::singleShot(500, c, [c]() { delete c; });
+        if (c) QTimer::singleShot(500, c, [c]() { delete c; });
+    };
+
+    connect(client, &TrainClient::sg_trainEnd, this, [this, idx, row, settleProcess](const QString &saveDir) {
+        if (idx < 0 || idx >= m_activeTrains.size() || m_activeTrains[idx].cleaned) return;
+        m_activeTrains[idx].cleaned = true;
+        if (!saveDir.isEmpty())
+            m_activeTrains[idx].outputDir = saveDir;
+        if (m_trainMgrDlg) m_trainMgrDlg->setSessionFinished(row);
+        settleProcess();
     });
-    connect(client, &TrainClient::sg_error, this, [this, idx, row](const QString &msg) {
+    connect(client, &TrainClient::sg_error, this, [this, idx, row, settleProcess](const QString &msg) {
         if (idx < 0 || idx >= m_activeTrains.size() || m_activeTrains[idx].cleaned) return;
         m_activeTrains[idx].cleaned = true;
         if (m_trainMgrDlg) m_trainMgrDlg->setSessionError(row, msg);
-
-        QProcess *proc = m_activeTrains[idx].process;
-        if (proc) {
-            proc->disconnect();
-            proc->kill();
-            proc->waitForFinished(3000);
-            proc->deleteLater();
-            m_activeTrains[idx].process = nullptr;
-        }
-        TrainClient *c = m_activeTrains[idx].client;
-        m_activeTrains[idx].client = nullptr;
-        QTimer::singleShot(500, c, [c]() { delete c; });
+        settleProcess();
     });
 
     // 兜底：进程退出但没收到 train_end/error 时，标记 session 结束
@@ -1762,56 +1712,42 @@ void MainWindow::sl_onTrainError(int, const QString &)
 {
 }
 
-void MainWindow::sl_onTrainPauseResume(int row, bool pause)
-{
-    for (int i = 0; i < m_activeTrains.size(); ++i) {
-        if (m_activeTrains[i].managerRow == row && m_activeTrains[i].client) {
-            QString cmd = pause ? "pause" : "holdon";
-            m_activeTrains[i].client->sendCommand(cmd);
-            break;
-        }
-    }
-}
-
 void MainWindow::sl_onTrainStop(int row)
 {
     for (int i = 0; i < m_activeTrains.size(); ++i) {
-        if (m_activeTrains[i].managerRow == row && m_activeTrains[i].client) {
-            m_activeTrains[i].client->sendCommand("stop");
+        if (m_activeTrains[i].managerRow != row || !m_activeTrains[i].client)
+            continue;
 
-            // 删除训练输出目录
-            QString alias = m_activeTrains[i].alias;
-            QString outDir = m_activeTrains[i].outputDir + "/" + alias;
-            if (QDir(outDir).exists()) {
-                QDir(outDir).removeRecursively();
-            }
+        QString alias = m_activeTrains[i].alias;
+        QProcess *proc = m_activeTrains[i].process;
 
-            // 先断开进程信号，避免 kill 后触发 errorOccurred 回调
-            m_activeTrains[i].cleaned = true;
-            QProcess *proc = m_activeTrains[i].process;
-            if (proc) {
-                proc->disconnect();
-                proc->kill();
-                proc->waitForFinished(3000);
-                proc->deleteLater();
-                m_activeTrains[i].process = nullptr;
-            }
+        // 先断开信号，避免 kill 后触发 errorOccurred 回调
+        m_activeTrains[i].cleaned = true;
+        if (proc) {
+            proc->disconnect();
+            killProcessTree(proc);
+            proc->deleteLater();
+            m_activeTrains[i].process = nullptr;
+        }
 
-            // 延迟删除 client，等 worker 线程处理完 stop 命令
-            TrainClient *client = m_activeTrains[i].client;
-            m_activeTrains[i].client = nullptr;
+        TrainClient *client = m_activeTrains[i].client;
+        m_activeTrains[i].client = nullptr;
+        if (client)
             QTimer::singleShot(500, client, [client]() { delete client; });
 
-            if (m_trainMgrDlg)
-                m_trainMgrDlg->setSessionFinished(row);
+        // 进程停稳后再删输出目录，否则边写边删会留下残骸
+        QString outDir = m_activeTrains[i].outputDir + "/" + alias;
+        if (QDir(outDir).exists())
+            QDir(outDir).removeRecursively();
 
-            // 删除 config 文件
-            QString configPath = m_curProjectPath + "/train_config_" + alias + ".json";
-            if (QFile::exists(configPath))
-                QFile::remove(configPath);
+        if (m_trainMgrDlg)
+            m_trainMgrDlg->setSessionFinished(row);
 
-            break;
-        }
+        QString configPath = m_curProjectPath + "/train_config_" + alias + ".json";
+        if (QFile::exists(configPath))
+            QFile::remove(configPath);
+
+        break;
     }
 }
 
@@ -1819,7 +1755,6 @@ void MainWindow::on_actionTrainUltralytics_triggered()
 {
     if (!m_trainMgrDlg) {
         m_trainMgrDlg = new TrainManagerDialog(this);
-        connect(m_trainMgrDlg, &TrainManagerDialog::sg_pauseResume, this, &MainWindow::sl_onTrainPauseResume);
         connect(m_trainMgrDlg, &TrainManagerDialog::sg_stop, this, &MainWindow::sl_onTrainStop);
     }
     m_trainMgrDlg->show();

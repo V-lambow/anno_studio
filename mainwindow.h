@@ -151,9 +151,7 @@ private slots:
     void sl_onTrainMetrics(int row, const TrainMetrics &metrics);
     void sl_onTrainEnd(int row, const QString &saveDir);
     void sl_onTrainError(int row, const QString &msg);
-    void sl_onTrainPauseResume(int row, bool pause);
-    void sl_onTrainStop(int row);
-    void saveLabelingData();
+    void sl_onTrainStop(int row);    void saveLabelingData();
     void mergeOverlappingStrokes();
     void on_actionCreateRoi_triggered();
 
@@ -267,7 +265,6 @@ private:
         QString name;
         QString alias;
         QString outputDir;
-        int port{9257};
         QProcess *process{nullptr};
         TrainClient *client{nullptr};
         int managerRow{-1};
@@ -275,6 +272,5 @@ private:
     };
     QList<ActiveTrain> m_activeTrains;
     TrainManagerDialog *m_trainMgrDlg{nullptr};
-    int m_nextTrainPort{9257};
 };
 #endif // MAINWINDOW_H

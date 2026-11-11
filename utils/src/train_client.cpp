@@ -1,168 +1,106 @@
 #include "train_client.h"
+
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 
-// ========== TrainClientWorker ==========
+namespace {
+constexpr auto kEventPrefix = "__TRAIN_SERVICE_EVENT__=";
+} // namespace
 
-TrainClientWorker::TrainClientWorker(int port, QObject *parent)
-    : QObject(parent), m_port(port),
-      m_ctx(1),
-      m_req(m_ctx, zmq::socket_type::req),
-      m_sub(m_ctx, zmq::socket_type::sub)
-{
-}
-
-TrainClientWorker::~TrainClientWorker()
-{
-    if (m_pollTimer) {
-        m_pollTimer->stop();
-        delete m_pollTimer;
-    }
-    m_req.close();
-    m_sub.close();
-    m_ctx.close();
-}
-
-void TrainClientWorker::start()
-{
-    m_pollTimer = new QTimer();
-    m_pollTimer->setInterval(2000);
-    connect(m_pollTimer, &QTimer::timeout, this, &TrainClientWorker::pollSubscription);
-    m_pollTimer->start();
-
-    setupReqSocket();
-
-    int linger = 0;
-    m_sub.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-    m_sub.connect("tcp://localhost:" + std::to_string(m_port));
-    const char *sub_filter = "";
-    m_sub.setsockopt(ZMQ_SUBSCRIBE, sub_filter, strlen(sub_filter));
-}
-
-void TrainClientWorker::setupReqSocket()
-{
-    int linger = 0;
-    m_req.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-    int rcvTimeout = 3000;
-    m_req.setsockopt(ZMQ_RCVTIMEO, &rcvTimeout, sizeof(rcvTimeout));
-    m_req.connect("tcp://localhost:" + std::to_string(m_port + 1));
-}
-
-void TrainClientWorker::sl_sendCommand(const QString &cmd)
-{
-    Json::Value req;
-    req["cmd"] = cmd.toStdString();
-
-    Json::FastWriter writer;
-    std::string reqStr = writer.write(req);
-
-    try {
-        m_req.send(zmq::buffer(reqStr), zmq::send_flags::none);
-
-        zmq::message_t reply;
-        auto result = m_req.recv(reply, zmq::recv_flags::none);
-        if (!result) {
-            Json::Value err;
-            err["status"] = "error";
-            err["message"] = "No response from server";
-            emit sg_commandResult(err);
-
-            m_req.close();
-            m_req = zmq::socket_t(m_ctx, zmq::socket_type::req);
-            setupReqSocket();
-            return;
-        }
-
-        std::string replyStr = static_cast<char*>(reply.data());
-        Json::Value resp;
-        Json::Reader reader;
-        reader.parse(replyStr, resp);
-        emit sg_commandResult(resp);
-    } catch (const zmq::error_t &e) {
-        Json::Value err;
-        err["status"] = "error";
-        err["message"] = e.what();
-        emit sg_commandResult(err);
-
-        try {
-            m_req.close();
-            m_req = zmq::socket_t(m_ctx, zmq::socket_type::req);
-            setupReqSocket();
-        } catch (const zmq::error_t &) {}
-    }
-}
-
-void TrainClientWorker::pollSubscription()
-{
-    zmq::pollitem_t items[] = { {m_sub, 0, ZMQ_POLLIN, 0} };
-    try {
-        zmq::poll(items, 1, std::chrono::milliseconds(0));
-        if (items[0].revents & ZMQ_POLLIN) {
-            zmq::message_t topic;
-            zmq::message_t data;
-            m_sub.recv(topic, zmq::recv_flags::none);
-            m_sub.recv(data, zmq::recv_flags::none);
-
-            std::string topicStr = static_cast<char*>(topic.data());
-            std::string dataStr = static_cast<char*>(data.data());
-
-            Json::Value msg;
-            Json::Reader reader;
-            reader.parse(dataStr, msg);
-
-            if (topicStr == "metrics") {
-                TrainMetrics m;
-                m.epoch = msg["epoch"].asInt();
-                m.totalEpochs = msg["total_epochs"].asInt();
-                m.loss = msg["loss"].asDouble();
-                m.boxLoss = msg["box_loss"].asDouble();
-                m.clsLoss = msg["cls_loss"].asDouble();
-                m.dflLoss = msg["dfl_loss"].asDouble();
-                m.precision = msg["precision"].asDouble();
-                m.recall = msg["recall"].asDouble();
-                m.mAP50 = msg["mAP50"].asDouble();
-                m.mAP50_95 = msg["mAP50_95"].asDouble();
-                emit sg_metrics(m);
-            } else if (topicStr == "train_end") {
-                emit sg_trainEnd(QString::fromStdString(msg["save_dir"].asString()));
-            } else if (topicStr == "error") {
-                emit sg_error(QString::fromStdString(msg["message"].asString()));
-            }
-        }
-    } catch (const zmq::error_t &) {
-    }
-}
-
-// ========== TrainClient ==========
-
-TrainClient::TrainClient(int port, QObject *parent)
+TrainClient::TrainClient(QObject *parent)
     : QObject(parent)
 {
-    qRegisterMetaType<Json::Value>("Json::Value");
-
-    m_worker = new TrainClientWorker(port);
-    m_worker->moveToThread(&m_thread);
-
-    connect(&m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
-    connect(m_worker, &TrainClientWorker::sg_commandResult, this, &TrainClient::sg_commandResult);
-    connect(m_worker, &TrainClientWorker::sg_metrics, this, &TrainClient::sg_metrics);
-    connect(m_worker, &TrainClientWorker::sg_trainEnd, this, &TrainClient::sg_trainEnd);
-    connect(m_worker, &TrainClientWorker::sg_error, this, &TrainClient::sg_error);
-
-    connect(this, &TrainClient::sg_sendCommand, m_worker, &TrainClientWorker::sl_sendCommand);
-    connect(this, &TrainClient::sg_startWorker, m_worker, &TrainClientWorker::start);
-
-    m_thread.start();
-    emit sg_startWorker();
 }
 
-TrainClient::~TrainClient()
+void TrainClient::attachProcess(QProcess *process)
 {
-    m_thread.quit();
-    m_thread.wait(3000);
+    m_process = process;
+    connect(process, &QProcess::readyReadStandardOutput, this, &TrainClient::sl_readyRead);
+    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &TrainClient::sl_finished);
 }
 
-void TrainClient::sendCommand(const QString &cmd)
+void TrainClient::sl_readyRead()
 {
-    emit sg_sendCommand(cmd);
+    if (!m_process)
+        return;
+
+    m_buffer += m_process->readAllStandardOutput();
+
+    int idx = -1;
+    while ((idx = m_buffer.indexOf('\n')) >= 0) {
+        const QByteArray line = m_buffer.left(idx);
+        m_buffer.remove(0, idx + 1);
+        dispatch(QString::fromUtf8(line));
+    }
+}
+
+void TrainClient::sl_finished(int exitCode, QProcess::ExitStatus status)
+{
+    sl_readyRead();
+    if (m_terminalSeen)
+        return;
+
+    if (status == QProcess::NormalExit && exitCode == 0)
+        emit sg_trainEnd(m_saveDir);
+    else
+        emit sg_error(QStringLiteral("train_json_service exited with code %1").arg(exitCode));
+}
+
+void TrainClient::dispatch(const QString &raw)
+{
+    const QString line = raw.trimmed();
+    if (line.isEmpty())
+        return;
+
+    const QString prefix = QString::fromLatin1(kEventPrefix);
+    if (!line.startsWith(prefix))
+        return;
+
+    const QJsonObject payload =
+        QJsonDocument::fromJson(line.mid(prefix.size()).toUtf8()).object();
+    const QString event = payload.value(QStringLiteral("event")).toString();
+    if (event.isEmpty())
+        return;
+
+    if (event == QLatin1String("training_started")) {
+        m_saveDir = payload.value(QStringLiteral("save_dir")).toString();
+        return;
+    }
+
+    if (event == QLatin1String("training_metrics")) {
+        const int epoch = payload.value(QStringLiteral("epoch")).toInt();
+        const int total = payload.value(QStringLiteral("total_epochs")).toInt();
+        // ultralytics final_eval() 会在 total+1 复发一次 best 指标，进度条不能显示 101/100
+        if (epoch > total)
+            return;
+
+        TrainMetrics m;
+        m.epoch = epoch;
+        m.totalEpochs = total;
+        m.loss = payload.value(QStringLiteral("loss")).toDouble();
+        m.boxLoss = payload.value(QStringLiteral("box_loss")).toDouble();
+        m.clsLoss = payload.value(QStringLiteral("cls_loss")).toDouble();
+        m.dflLoss = payload.value(QStringLiteral("dfl_loss")).toDouble();
+        m.precision = payload.value(QStringLiteral("precision")).toDouble();
+        m.recall = payload.value(QStringLiteral("recall")).toDouble();
+        m.mAP50 = payload.value(QStringLiteral("mAP50")).toDouble();
+        m.mAP50_95 = payload.value(QStringLiteral("mAP50_95")).toDouble();
+        emit sg_metrics(m);
+        return;
+    }
+
+    if (event == QLatin1String("training_completed")
+        || event == QLatin1String("training_stopped")) {
+        m_terminalSeen = true;
+        emit sg_trainEnd(m_saveDir);
+        return;
+    }
+
+    if (event == QLatin1String("training_error")
+        || event == QLatin1String("protocol_error")) {
+        m_terminalSeen = true;
+        emit sg_error(payload.value(QStringLiteral("error")).toString());
+    }
 }
